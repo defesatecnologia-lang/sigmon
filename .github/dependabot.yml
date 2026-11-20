@@ -43,13 +43,13 @@ updates:
     # Ignorar também @vitest/* evita o conflito de peer entre vitest e coverage-v8.
     ignore:
       - dependency-name: "typescript"
-        update-types: ["major"]
+        update-types: ["version-update:semver-major"]
       - dependency-name: "vitest"
-        update-types: ["major"]
+        update-types: ["version-update:semver-major"]
       - dependency-name: "@vitest/*"
-        update-types: ["major"]
+        update-types: ["version-update:semver-major"]
       - dependency-name: "@fullhuman/postcss-purgecss"
-        update-types: ["major"]
+        update-types: ["version-update:semver-major"]
     groups:
       dev-tools:
         patterns:
