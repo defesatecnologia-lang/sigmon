@@ -1,0 +1,47 @@
+<?php
+
+declare(strict_types=1);
+
+if (file_exists(__DIR__ . '/../config/app.php')) {
+    require_once __DIR__ . '/../config/app.php';
+}
+if (file_exists(__DIR__ . '/../config/database.php')) {
+    require_once __DIR__ . '/../config/database.php';
+}
+if (file_exists(__DIR__ . '/../inc/security.php')) {
+    require_once __DIR__ . '/../inc/security.php';
+}
+if (file_exists(__DIR__ . '/../inc/single_session.php')) {
+    require_once __DIR__ . '/../inc/single_session.php';
+}
+if (file_exists(__DIR__ . '/../src/ErrorHandler.php')) {
+    require_once __DIR__ . '/../src/ErrorHandler.php';
+}
+
+\App\registerGlobalErrorHandlers('api');
+
+if (session_status() === PHP_SESSION_NONE) {
+    configureSessionSecurity();
+    session_start();
+}
+
+// Modo de teste: suprime exit e headers em ApiResponse para permitir asserts
+if (class_exists(\App\Api\ApiResponse::class, true)) {
+    \App\Api\ApiResponse::setTestMode(true);
+}
+
+function getTestDatabase(): database
+{
+    static $db = null;
+    if ($db === null) {
+        $db = new database();
+    }
+    return $db;
+}
+
+function assertApiResponse(array $response, int $expectedHttpCode = 200): void
+{
+    if ($expectedHttpCode === 200) {
+        PHPUnit\Framework\Assert::assertTrue($response['success'] ?? false, 'Expected success=true');
+    }
+}

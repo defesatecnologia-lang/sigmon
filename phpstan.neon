@@ -1,0 +1,16 @@
+parameters:
+    bootstrapFiles:
+        - phpstan-stubs.php
+    level: 5
+    treatPhpDocTypesAsCertain: false
+    paths:
+        - api
+        - src
+        - inc
+        - resources
+        - auth
+        - accounts
+        - config
+        - database
+    excludePaths:
+        - config/sentry.php

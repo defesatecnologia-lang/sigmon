@@ -1,0 +1,250 @@
+<?php
+require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../inc/check_access.php';
+
+requererAcesso('admin');
+
+$db = db();
+
+$id_usuario = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+if (!$id_usuario) {
+    header('Location: index.php?page=listarUsuario');
+    exit;
+}
+
+$sql = "SELECT u.id, u.usuario, u.nome, n.nome as nivel_acesso, u.ativo, u.senha_temporaria, u.secretaria_id FROM usuarios u LEFT JOIN niveis_acesso n ON u.nivel_acesso_id = n.id WHERE u.id = :id";
+$params = [':id' => $id_usuario];
+$result = $db->query($sql, $params);
+
+if ($result['status'] !== 'success' || count($result['data']) === 0) {
+    $_SESSION['erro'] = 'Usuario nao encontrado.';
+    header('Location: index.php?page=listarUsuario');
+    exit;
+}
+
+$usuario = $result['data'][0];
+
+$secretariasResult = $db->query("SELECT id, nome, sigla FROM secretarias WHERE ativo = 1 ORDER BY nome");
+$secretarias = ($secretariasResult['status'] === 'success') ? ($secretariasResult['data'] ?? []) : [];
+$usuarioSecretariaId = $usuario->secretaria_id ?? null;
+
+$mensagem_erro = $_SESSION['erro_editar_usuario'] ?? '';
+unset($_SESSION['erro_editar_usuario']);
+$mensagem_sucesso = $_SESSION['sucesso_editar_usuario'] ?? '';
+unset($_SESSION['sucesso_editar_usuario']);
+$senhaTemporariaExibida = $_SESSION['senha_temporaria_exibida'] ?? null;
+unset($_SESSION['senha_temporaria_exibida']);
+
+if ($senhaTemporariaExibida !== null) {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+}
+?>
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-user-edit me-2"></i>Editar Usuario
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <?php if ($mensagem_erro): ?>
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <?= htmlspecialchars($mensagem_erro, ENT_QUOTES, 'UTF-8') ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if ($mensagem_sucesso): ?>
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <?= htmlspecialchars($mensagem_sucesso, ENT_QUOTES, 'UTF-8') ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        <?php if (isset($senhaTemporariaExibida)): ?>
+                        <div class="alert alert-warning" role="alert">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="fas fa-exclamation-triangle fa-lg"></i>
+                                <strong>Nova senha temporaria gerada:</strong>
+                            </div>
+                            <div class="mt-2 p-3 bg-dark text-warning rounded text-center temp-password-display">
+                                <?= htmlspecialchars($senhaTemporariaExibida, ENT_QUOTES, 'UTF-8') ?>
+                            </div>
+                            <div class="mt-2 small text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Copie esta senha agora. Por seguranca, ela nao sera exibida novamente apos recarregar a pagina.
+                                O usuario sera forcado a trocar a senha no proximo login.
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                    <?php endif; ?>
+
+                    <form method="post">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(getCsrfToken(), ENT_QUOTES, 'UTF-8') ?>">
+                        <input type="hidden" name="id" value="<?= (int)$usuario->id ?>">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="nome" class="form-label">Nome Completo *</label>
+                                    <input type="text" class="form-control" id="nome" name="nome" value="<?= htmlspecialchars($usuario->nome, ENT_QUOTES, 'UTF-8') ?>" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="usuario" class="form-label">Nome de Usuario *</label>
+                                    <input type="text" class="form-control" id="usuario" name="usuario" value="<?= htmlspecialchars($usuario->usuario, ENT_QUOTES, 'UTF-8') ?>" required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="nivel_acesso" class="form-label">Nivel de Acesso</label>
+                                    <select class="form-select" id="nivel_acesso" name="nivel_acesso">
+                                        <option value="user" <?= $usuario->nivel_acesso === 'user' ? 'selected' : '' ?>>Usuario</option>
+                                        <option value="supervisor" <?= $usuario->nivel_acesso === 'supervisor' ? 'selected' : '' ?>>Supervisor</option>
+                                        <option value="admin" <?= $usuario->nivel_acesso === 'admin' ? 'selected' : '' ?>>Administrador</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Status</label>
+                                    <div class="form-check form-switch mt-2">
+                                        <input class="form-check-input" type="checkbox" id="ativo" name="ativo" value="1" <?= $usuario->ativo ? 'checked' : '' ?>>
+                                        <label class="form-check-label" for="ativo">
+                                            Usuario ativo
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="secretaria_id" class="form-label">Secretaria</label>
+                                    <select class="form-select" id="secretaria_id" name="secretaria_id" data-required-levels="user,supervisor">
+                                        <option value="">-- Selecione --</option>
+                                        <?php foreach ($secretarias as $sec): ?>
+                                            <option value="<?= (int)$sec->id ?>" <?= ((string)$usuarioSecretariaId === (string)$sec->id) ? 'selected' : '' ?>>
+                                                <?= htmlspecialchars($sec->nome, ENT_QUOTES, 'UTF-8') ?>
+                                                (<?= htmlspecialchars($sec->sigla, ENT_QUOTES, 'UTF-8') ?>)
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <div class="form-text">Obrigatorio para usuarios e supervisores. Administradores podem deixar em branco.</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="redefinir_senha" name="redefinir_senha">
+                                <label class="form-check-label" for="redefinir_senha">
+                                    <strong>Redefinir senha para temporaria</strong>
+                                </label>
+                                <div class="form-text">
+                                    Marque esta opcao para gerar uma nova senha temporaria segura.
+                                    O usuario sera obrigado a trocar a senha no proximo login.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <a href="?page=listarUsuario" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-1"></i>Voltar
+                            </a>
+                            <button type="submit" name="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i>Salvar Alteracoes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+<div class="modal fade" id="modalConfirmarRebaixar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-warning">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>Confirmar Alteracao</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Tem certeza que deseja rebaixar este administrador?</strong></p>
+                <p class="text-muted mb-0">Esta acao pode ser irreversivel. O usuario perdera acesso administrativo ao sistema.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" id="btnConfirmarRebaixar">
+                    <i class="fas fa-arrow-down me-1"></i>Rebaixar Nivel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script nonce="<?= htmlspecialchars($CSP_NONCE ?? '', ENT_QUOTES, 'UTF-8') ?>">
+(function() {
+    var selectEl = document.getElementById('nivel_acesso');
+    var secFieldEdit = document.getElementById('secretaria_id');
+    var secContainerEdit = secFieldEdit ? secFieldEdit.closest('.mb-3') : null;
+    var valorOriginal = '<?= htmlspecialchars($usuario->nivel_acesso ?? 'user', ENT_QUOTES, 'UTF-8') ?>';
+    var modalConfirm = new bootstrap.Modal(document.getElementById('modalConfirmarRebaixar'));
+    var confirmBtn = document.getElementById('btnConfirmarRebaixar');
+    var pendingValue = null;
+
+    function atualizarSecretariaField() {
+        if (!selectEl || !secFieldEdit) return;
+        if (selectEl.value === 'admin') {
+            secFieldEdit.removeAttribute('required');
+            secFieldEdit.value = '';
+            if (secContainerEdit) secContainerEdit.style.display = 'none';
+        } else {
+            secFieldEdit.setAttribute('required', 'required');
+            if (secContainerEdit) secContainerEdit.style.display = '';
+        }
+    }
+
+    selectEl.addEventListener('change', function() {
+        // Primeiro, abre modal se for rebaixar admin
+        if (valorOriginal === 'admin' && this.value !== 'admin') {
+            pendingValue = this.value;
+            modalConfirm.show();
+            this.value = valorOriginal;
+            return;
+        }
+        atualizarSecretariaField();
+    });
+
+    confirmBtn.addEventListener('click', function() {
+        if (pendingValue) {
+            selectEl.value = pendingValue;
+            atualizarSecretariaField();
+        }
+        pendingValue = null;
+        modalConfirm.hide();
+    });
+
+    // Estado inicial
+    atualizarSecretariaField();
+})();
+</script>
+            <div class="card mt-4 border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h6 class="mb-0">
+                        <i class="fas fa-info-circle me-2"></i>Informacoes Importantes
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="mb-0">
+                        <li>Campos marcados com * sao obrigatorios</li>
+                        <li>Ao redefinir a senha, o usuario sera forcado a troca-la no proximo login</li>
+                        <li>Usuarios inativos nao poderao fazer login no sistema</li>
+                        <li><strong>Supervisor:</strong> Acesso a relatorios, sem administracao de usuarios</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,156 @@
+# ============================================
+# SIGMON — Sistema de Gerenciamento de Cameras e Alarmes
+# Dockerfile multi-stage: dev (Apache) e prod (Apache self-contained)
+#============================================
+# DEV  (target: dev)     -> apenas PHP+Apache+composer, codigo via bind mount
+# PROD (target: prod)    -> Apache + composer + assets buildados do Vite (auto-contido)
+#
+#Uso:
+#  Dev:  docker compose up -d            (usa target: dev do compose)
+#  Prod: docker build --target prod -t sigmon:prod .
+#============================================
+
+
+# ============================================
+# Stage base — dependencias de sistema + extensões PHP + Apache
+#============================================
+FROM php:8.5-apache AS base
+
+LABEL org.opencontainers.image.source="https://github.com/elciomsantos/sigmon"
+LABEL org.opencontainers.image.description="Sistema de Gerenciamento de Cameras e Alarmes"
+LABEL org.opencontainers.image.licenses="MIT"
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+# apt-get upgrade aplica atualizacoes de seguranca dos pacotes ja presentes na
+# imagem base (ex.: linux-libc-dev), evitando CVEs abertos no Trivy image scan.
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+        git zip unzip curl libpng-dev libzip-dev libonig-dev \
+        libxml2-dev libcurl4-openssl-dev pkg-config libssl-dev \
+        locales \
+    && sed -i 's/# pt_BR.UTF-8/pt_BR.UTF-8/' /etc/locale.gen \
+    && locale-gen pt_BR.UTF-8 \
+    && docker-php-ext-install pdo_mysql mbstring zip gd xml curl \
+    && pecl install apcu && docker-php-ext-enable apcu \
+    && a2enmod rewrite deflate expires headers \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Composer (versao pinada para reprodutibilidade)
+COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
+
+# Configuracoes PHP (validas para dev e prod)
+RUN echo "memory_limit = 256M" > /usr/local/etc/php/conf.d/memory.ini \
+    && echo "upload_max_filesize = 20M" > /usr/local/etc/php/conf.d/upload.ini \
+    && echo "post_max_size = 20M" >> /usr/local/etc/php/conf.d/upload.ini \
+    && echo "max_execution_time = 120" > /usr/local/etc/php/conf.d/timeout.ini \
+    && echo "opcache.enable=1" > /usr/local/etc/php/conf.d/opcache.ini \
+    && echo "opcache.memory_consumption=128" >> /usr/local/etc/php/conf.d/opcache.ini \
+    && echo "opcache.interned_strings_buffer=8" >> /usr/local/etc/php/conf.d/opcache.ini \
+    && echo "opcache.max_accelerated_files=10000" >> /usr/local/etc/php/conf.d/opcache.ini \
+    && echo "opcache.revalidate_freq=2" >> /usr/local/etc/php/conf.d/opcache.ini \
+    && echo "opcache.save_comments=1" >> /usr/local/etc/php/conf.d/opcache.ini \
+    && echo "apc.enabled=1" >> /usr/local/etc/php/conf.d/opcache.ini \
+    && echo "apc.shm_size=32M" >> /usr/local/etc/php/conf.d/opcache.ini
+
+# Apache: ouvir na 80 (network_mode: host no compose)
+# DocumentRoot em /var/www/html/public.
+RUN a2dissite 000-default \
+    && printf '<VirtualHost *:80>\n\
+    ServerName sigmon.local\n\
+    DocumentRoot /var/www/html/public\n\
+    <Directory /var/www/html/public>\n\
+        Options -Indexes +FollowSymLinks\n\
+        AllowOverride All\n\
+        Require all granted\n\
+    </Directory>\n\
+</VirtualHost>\n' > /etc/apache2/sites-available/cameras.conf \
+    && a2ensite cameras
+
+WORKDIR /var/www/html
+
+EXPOSE 80
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD curl -sf http://localhost:80/ || exit 1
+
+
+# ============================================
+# Stage dev — apenas dependencias PHP, codigo via bind mount
+# O codigo-fonte e montado via bind mount no docker-compose.yml.
+# Um entrypoint garante `composer install` quando vendor/ estiver
+# ausente e ajusta permissoes de storage/uploads.
+#============================================
+FROM base AS dev
+
+# Em dev o Apache escuta na 5000 (compose usa network_mode: host).
+# O stage base/prod continua na 80 — a mudanca e exclusiva deste stage.
+RUN sed -i 's/Listen 80/Listen 5000/' /etc/apache2/ports.conf \
+    && sed -i 's/<VirtualHost \*:80>/<VirtualHost *:5000>/' /etc/apache2/sites-available/cameras.conf
+
+EXPOSE 5000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD curl -sf http://localhost:5000/ || exit 1
+
+# xdebug para depuracao em desenvolvimento (opcional, nao-fatal)
+RUN pecl install xdebug 2>/dev/null \
+    && docker-php-ext-enable xdebug 2>/dev/null \
+    || echo "xdebug indisponivel, seguindo"
+
+# Entrypoint de desenvolvimento
+COPY docker/dev-entrypoint.sh /usr/local/bin/dev-entrypoint.sh
+RUN chmod +x /usr/local/bin/dev-entrypoint.sh
+
+ENV SIGMON_ENV=development
+
+# Roda como www-data — entrypoint ajusta ownership quando preciso
+CMD ["dev-entrypoint.sh"]
+
+
+# ============================================
+# Stage build — compilar assets do Vite
+#============================================
+FROM node:26-slim AS build
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY vite.config.ts tsconfig.json postcss.config.js ./
+COPY src/ src/
+COPY public/ public/
+COPY scripts/ scripts/
+RUN npm run build
+
+
+# ============================================
+# Stage prod — Apache self-contained com codigo + assets
+#============================================
+FROM base AS prod
+
+# composer primeiro (cache por camada — so reinstalla se composer.* mudar)
+COPY composer.json composer.lock ./
+RUN composer install --no-interaction --optimize-autoloader --classmap-authoritative --no-dev \
+    --no-scripts --no-autoloader
+
+# Agora copiar o resto do codigo e regenerar autoload classmap
+COPY . .
+RUN composer dump-autoload --classmap-authoritative --no-dev
+
+# Assets buildados pelo Vite
+COPY --from=build /app/public/assets/ public/assets/
+COPY --from=build /app/public/sw-assets.json public/sw-assets.json
+
+# Diretorios de storage
+RUN mkdir -p storage/ratelimit storage/cep_cache public/uploads \
+    && chown -R www-data:www-data storage public/uploads \
+    && chmod -R 755 storage public/uploads
+
+ENV SIGMON_ENV=production
+
+USER www-data
+
+CMD ["apache2-foreground"]

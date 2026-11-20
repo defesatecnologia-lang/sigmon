@@ -1,0 +1,5 @@
+# Bloquear acesso direto a todos os arquivos.
+# Os anexos sao servidos exclusivamente via api_servir_anexo (autenticado).
+Require all denied
+
+Options -Indexes

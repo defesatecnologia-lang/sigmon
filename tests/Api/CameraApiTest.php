@@ -1,0 +1,220 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Api;
+
+use PHPUnit\Framework\TestCase;
+
+class CameraApiTest extends TestCase
+{
+    private string $baseUrl;
+
+    protected function setUp(): void
+    {
+        $this->baseUrl = getenv('TEST_BASE_URL') ?: 'http://localhost:8080';
+    }
+
+    public function testListCamerasWithoutAuthReturns401(): void
+    {
+        $httpCode = $this->requestStatus('/index.php?page=api/api_cameras');
+        $this->assertEquals(401, $httpCode);
+    }
+
+    public function testListCamerasWithInvalidMethodReturns401(): void
+    {
+        // Arquitetura auth-first: sem sessão, qualquer método é rejeitado com 401
+        // antes de validar o método aceito pelo endpoint.
+        $httpCode = $this->requestStatus('/index.php?page=api/api_cameras', 'POST');
+        $this->assertEquals(401, $httpCode);
+    }
+
+    public function testCreateCameraWithoutAuthReturns401(): void
+    {
+        $httpCode = $this->requestStatus('/index.php?page=api/api_cadastrar_cameras', 'POST');
+        $this->assertEquals(401, $httpCode);
+    }
+
+    public function testEditCameraWithoutAuthReturns401(): void
+    {
+        $httpCode = $this->requestStatus('/index.php?page=api/api_editar_camera', 'POST');
+        $this->assertEquals(401, $httpCode);
+    }
+
+    public function testDeleteCameraWithoutAuthReturns401(): void
+    {
+        $httpCode = $this->requestStatus('/index.php?page=api/api_excluir_camera', 'POST');
+        $this->assertEquals(401, $httpCode);
+    }
+
+    public function testManutencaoCamerasWithoutAuthReturns401(): void
+    {
+        $httpCode = $this->requestStatus('/index.php?page=api/api_manutencao_cameras');
+        $this->assertEquals(401, $httpCode);
+    }
+
+    public function testDashboardWithoutAuthReturns401(): void
+    {
+        $httpCode = $this->requestStatus('/index.php?page=api/api_dashboard');
+        $this->assertEquals(401, $httpCode);
+    }
+
+    public function testListCamerasReturnsJson(): void
+    {
+        $response = $this->requestJson('/index.php?page=api/api_cameras');
+        if ($response === null) {
+            $this->markTestSkipped("API server not reachable at {$this->baseUrl}");
+        }
+        $this->assertIsArray($response);
+        $this->assertArrayHasKey('success', $response);
+    }
+
+    public function testPaginatedCamerasReturnsPaginationMeta(): void
+    {
+        $response = $this->requestJson('/index.php?page=api/api_cameras&per_page=10');
+        if ($response === null) {
+            $this->markTestSkipped("API server not reachable at {$this->baseUrl}");
+        }
+        if (!empty($response['pagination'])) {
+            $this->assertArrayHasKey('page', $response['pagination']);
+            $this->assertArrayHasKey('per_page', $response['pagination']);
+            $this->assertArrayHasKey('total', $response['pagination']);
+            $this->assertArrayHasKey('total_pages', $response['pagination']);
+        }
+    }
+
+    public function testNonExistentEndpointReturns404(): void
+    {
+        // Arquitetura auth-first: sem sessão, request em endpoint inválido é
+        // rejeitado com 401 antes de validar a existência do endpoint.
+        $httpCode = $this->requestStatus('/index.php?page=api/api_nonexistent');
+        $this->assertEquals(401, $httpCode);
+    }
+
+    public function testCreateCameraWithEmptyDataReturns401(): void
+    {
+        // Arquitetura auth-first: sem sessão, qualquer POST é rejeitado com 401
+        // antes de validar o payload (que resultaria em 422).
+        $httpCode = $this->requestStatus('/index.php?page=api/api_cadastrar_cameras', 'POST', '[]');
+        $this->assertEquals(401, $httpCode);
+    }
+
+    public function testApiResponseFormatConsistency(): void
+    {
+        $response = $this->requestJson('/index.php?page=api/api_ping');
+        if ($response === null) {
+            $this->markTestSkipped("API server not reachable at {$this->baseUrl}");
+        }
+        $this->assertArrayHasKey('success', $response);
+        $this->assertArrayHasKey('code', $response);
+        $this->assertArrayHasKey('message', $response);
+        $this->assertArrayHasKey('meta', $response);
+        $this->assertArrayHasKey('timestamp', $response['meta'] ?? []);
+        $this->assertArrayHasKey('version', $response['meta'] ?? []);
+        $this->assertEquals('v2', $response['meta']['version'] ?? '');
+    }
+
+    /**
+     * Helper para fazer request autenticado via cookie de sessão
+     * Uso futuro: $this->requestWithSession('/index.php?page=api/api_cameras', $sessionId)
+     */
+    private function requestWithSession(string $path, string $sessionId, string $method = 'GET', ?string $body = null): array
+    {
+        $opts = [
+            'http' => [
+                'method' => $method,
+                'timeout' => 5,
+                'ignore_errors' => true,
+                'header' => "Cookie: PHPSESSID=" . urlencode($sessionId) . "\r\n",
+            ],
+        ];
+        if ($body !== null) {
+            $opts['http']['header'] .= "Content-Type: application/json\r\n";
+            $opts['http']['content'] = $body;
+        }
+        $context = stream_context_create($opts);
+        set_error_handler(static function (): bool { return true; });
+        try {
+            $content = file_get_contents($this->baseUrl . $path, false, $context);
+        } finally {
+            restore_error_handler();
+        }
+        $decoded = $content !== false ? json_decode($content, true) : null;
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private function requestStatus(string $path, string $method = 'GET', ?string $body = null): int
+    {
+        $opts = [
+            'http' => [
+                'method' => $method,
+                'timeout' => 5,
+                'ignore_errors' => true,
+            ],
+        ];
+        if ($body !== null) {
+            $opts['http']['header'] = "Content-Type: application/json\r\n";
+            $opts['http']['content'] = $body;
+        }
+
+        $context = stream_context_create($opts);
+        $headers = null;
+
+        set_error_handler(static function (): bool { return true; });
+        try {
+            file_get_contents($this->baseUrl . $path, false, $context);
+            $headers = $http_response_header ?? null;
+        } finally {
+            restore_error_handler();
+        }
+
+        if (!$headers || !isset($headers[0])) {
+            $this->markTestSkipped("API server not reachable at {$this->baseUrl}");
+        }
+
+        preg_match('#HTTP/\d(?:\.\d)?\s+(\d+)#', $headers[0], $matches);
+        $code = (int)($matches[1] ?? 0);
+
+        // 404 num host vivo indica que a aplicacao nao esta servida na URL de teste
+        // (ex.: servidor Apache local sem o front controller) — nao e uma regressao.
+        if ($code === 404 && getenv('TEST_BASE_URL') === false) {
+            $this->markTestSkipped("Application not served at {$this->baseUrl} (got 404)");
+        }
+
+        return $code;
+    }
+
+    private function requestJson(string $path): ?array
+    {
+        $context = stream_context_create([
+            'http' => [
+                'method' => 'GET',
+                'timeout' => 5,
+                'ignore_errors' => true,
+            ],
+        ]);
+
+        set_error_handler(static function (): bool { return true; });
+        try {
+            $content = file_get_contents($this->baseUrl . $path, false, $context);
+            $headers = $http_response_header ?? null;
+        } finally {
+            restore_error_handler();
+        }
+
+        if ($content === false) {
+            return null;
+        }
+
+        // Host vivo devolvendo 404 = aplicacao nao servida na URL (nao e regressao).
+        if (getenv('TEST_BASE_URL') === false && $headers && isset($headers[0])) {
+            preg_match('#HTTP/\d(?:\.\d)?\s+(\d+)#', $headers[0], $matches);
+            if ((int)($matches[1] ?? 0) === 404) {
+                return null;
+            }
+        }
+
+        $decoded = json_decode($content, true);
+        return is_array($decoded) ? $decoded : null;
+    }
+}

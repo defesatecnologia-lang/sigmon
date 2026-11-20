@@ -1,0 +1,30 @@
+// src/assets/js/main.ts - Entry point for Vite bundler
+// This file imports all modules for bundling into a single main.js
+
+// CSS
+import '../css/main.css';
+import '../css/theme-enhancements.css';
+
+// Core
+import './core/dashboard-core';
+
+// Utils
+import './utils/fetchWithTimeout';
+import './utils/file-upload';
+import './utils/ui-utils';
+import './utils/uppercase';
+
+// Shared maintenance utilities
+import './shared/manutencao-utils';
+
+// UI Utils
+import './utils/ui/ErrorHandler';
+import './utils/ui/LoadingManager';
+import './utils/ui/theme-manager';
+import './utils/showSuccessModal';
+import './utils/showErrorModal';
+
+// Dashboard modules
+import './modules/dashboard-charts';
+
+// Build initialized

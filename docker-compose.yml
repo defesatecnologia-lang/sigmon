@@ -1,0 +1,78 @@
+# ============================================
+#Desenvolvimento — Apache 2 + PHP 8.5 + MySQL 8.4 LTS
+#Otimizado para WSL2: network_mode: host evita o netavark/nftables
+#(que falha em rootless Podman no WSL2). Bind mount do codigo-fonte
+#permite hot reload sem rebuild.
+#
+#Uso:
+#  docker compose up -d
+#  docker compose logs -f app
+#  docker compose down
+#
+# Acesso: http://localhost:5000/ (Apache do stage dev em network_mode: host)
+#============================================
+name: sigmon
+
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    network_mode: host
+    command: ["--event-scheduler=ON", "--log-bin-trust-function-creators=1", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpass}
+      MYSQL_DATABASE: ${DB_NAME:-cftv_gml}
+      MYSQL_USER: ${DB_USER:-cftv_user}
+      MYSQL_PASSWORD: ${DB_PASS:-cftv_pass}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./config/DB/cftv_gml.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./config/DB/private/seed_dev.sql:/docker-entrypoint-initdb.d/02-seed-dev.sql:ro
+      # Dados proprietarios de Londrina (arquivo local, gitignored).
+      # Necessario em dev: copie o arquivo antes de `docker compose up`.
+      - type: bind
+        source: ./config/DB/private/proprios-pml.sql
+        target: /docker-entrypoint-initdb.d/03-proprios-pml.sql
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      SIGMON_ENV: development
+      # network_mode: host -> DB acessivel em 127.0.0.1:3306 (nao por nome DNS)
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-cftv_gml}
+      DB_USER: ${DB_USER:-cftv_user}
+      DB_PASS: ${DB_PASS:-cftv_pass}
+      APP_TIMEZONE: America/Sao_Paulo
+      SIGMON_SESSION_TIMEOUT: 3600
+      SIGMON_SESSION_ABSOLUTE_TIMEOUT: 28800
+      # Em dev, permitir inline styles para evitar quebrar Bootstrap
+      SIGMON_CSP_ALLOW_INLINE_STYLES: 1
+    volumes:
+      # Bind mount do codigo-fonte — mudancas refletem sem rebuild
+      - ./:/var/www/html
+      # Persistir storage e uploads (nao sobrescrever com bind mount)
+      - app_storage:/var/www/html/storage
+      - app_uploads:/var/www/html/public/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
+  app_storage:
+  app_uploads:

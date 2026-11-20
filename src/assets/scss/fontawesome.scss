@@ -1,0 +1,23 @@
+// Font Awesome self-host via npm package.
+//
+// O CSS gerado fica em public/assets/fontawesome-*.css e as webfonts em
+// public/assets/webfonts/ (copiadas por scripts/copy-assets.js). O default do
+// pacote é `../webfonts`, que a partir de /assets/ resolveria para /webfonts/
+// — caminho inexistente que cai no front controller PHP e devolve HTML no
+// lugar da fonte (ícones não renderizam). Configuramos o módulo de variáveis
+// para o caminho relativo correto: `webfonts/...`.
+//
+// Font Awesome 7 usa o módulo Sass `$font-path`; é preciso configurá-lo com
+// `@use ... with` ANTES de carregar os demais módulos que o consomem.
+@use "@fortawesome/fontawesome-free/scss/variables" with ($font-path: "webfonts");
+
+// Core + estilos base
+@use "@fortawesome/fontawesome-free/scss/fontawesome";
+
+// Estilos por familia
+@use "@fortawesome/fontawesome-free/scss/solid";
+@use "@fortawesome/fontawesome-free/scss/regular";
+@use "@fortawesome/fontawesome-free/scss/brands";
+
+// Compat com sintaxe legacy `fa`
+@use "@fortawesome/fontawesome-free/scss/v4-shims";

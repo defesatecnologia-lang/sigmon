@@ -1,0 +1,131 @@
+# ============================================
+#Producao — Nginx + PHP-FPM 8.4 + MySQL 8.4 LTS
+#Para Ubuntu Server (Docker Engine nativo — NAO WSL2).
+#Sem bind mount de codigo: a imagem e auto-contida (build no CI/registry).
+#Baseline de hardening conforme ESPECIFICACAO-TECNICA-SEGURANCA-PHP.md (Secoes 33-41, 57)
+#
+#Uso (servidor Ubuntu):
+#   cp .env.prod.example .env       # configurar credenciais
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+#Alternativa (imagem de registry):
+#   Definir APP_TAG e GITHUB_REPOSITORY ou usar imagem pre-builtada.
+#============================================
+name: sigmon
+
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    # log-bin-trust-function-creators=1: necessario para criar a funcao
+    # proximo_codigo_equipamento() (NOT DETERMINISTIC / MODIFIES SQL DATA)
+    # no cftv_gml.sql quando o binary log esta ativado (MySQL 8.4 default).
+    command: ["--event-scheduler=ON", "--log-bin-trust-function-creators=1", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD required}
+      MYSQL_DATABASE: ${DB_NAME:-cftv_gml}
+      MYSQL_USER: ${DB_USER:-cftv_user}
+      MYSQL_PASSWORD: ${DB_PASS:?DB_PASS required}
+    # DB acessivel apenas na rede interna (backend), nao publicado no host
+    volumes:
+      # Dados do MySQL em disco externo (Ubuntu Server: /mnt/sstv-dados).
+      # Ajuste DB_DATA_PATH no .env se o ponto de montagem for diferente.
+      - ${DB_DATA_PATH:-/mnt/sstv-dados/mysql}:/var/lib/mysql
+      - ./config/DB/cftv_gml.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend
+    # Hardening: nao-root (mysql UID 999), capabilities minimas, read-only onde possivel
+    user: "999:999"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+      - /var/run/mysqld
+    mem_limit: 1g
+    cpus: "1.0"
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  app:
+    # Imagem do registry GHCR (build no CD) OU build local.
+    image: ghcr.io/${GITHUB_REPOSITORY:-elciomsantos/sigmon}:${APP_TAG:-latest}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.nginx
+    restart: unless-stopped
+    ports:
+      # HTTP (redirect 301 -> HTTPS) e HTTPS (TLS na 8443 interno -> 443 publico)
+      - "${APP_PORT:-80}:8080"
+      - "${APP_HTTPS_PORT:-443}:8443"
+    environment:
+      SIGMON_ENV: production
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-cftv_gml}
+      DB_USER: ${DB_USER:-cftv_user}
+      DB_PASS: ${DB_PASS:?DB_PASS required}
+      APP_TIMEZONE: America/Sao_Paulo
+      # Tag exibida no rodape. Usa APP_VERSION do .env ou a tag da imagem (APP_TAG).
+      APP_VERSION: ${APP_VERSION:-${APP_TAG:-latest}}
+      SIGMON_SESSION_TIMEOUT: 3600
+      SIGMON_SESSION_ABSOLUTE_TIMEOUT: 28800
+      SIGMON_CSP_ALLOW_INLINE_STYLES: 0
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      # Confiar no proxy Nginx (container app) para headers X-Forwarded-For.
+      # Defina em .env para listar os IPs reais dos load balancers (vazio = nenhum).
+      PROXY_TRUSTED_IPS: ${PROXY_TRUSTED_IPS:-}
+    volumes:
+      - app_storage:/var/www/html/storage
+      - app_uploads:/var/www/html/public/uploads
+      # Certificados TLS (self-signed gerado no entrypoint; CA interna via docker cp)
+      - nginx_certs:/etc/nginx/certs
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - frontend
+      - backend
+    # Hardening: non-root (www-data UID 33), capabilities drop, no-new-privileges, read-only, resource limits
+    user: "33:33"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx:uid=33,gid=33,mode=0750
+      - /var/log/nginx:uid=33,gid=33,mode=0750
+      - /var/lib/nginx:uid=33,gid=33,mode=0750
+      - /run:uid=33,gid=33,mode=0755
+    mem_limit: 1g
+    cpus: "1.0"
+    pids_limit: 512
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true
+
+volumes:
+  app_storage:
+  app_uploads:
+  nginx_certs:

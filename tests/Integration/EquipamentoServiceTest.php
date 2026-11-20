@@ -1,0 +1,259 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Integration;
+
+use PHPUnit\Framework\TestCase;
+
+class EquipamentoServiceTest extends TestCase
+{
+    private ?\database $db = null;
+
+    protected function setUp(): void
+    {
+        if (!defined('DB_HOST')) {
+            $this->markTestSkipped('Database not configured');
+        }
+
+        try {
+            $this->db = getTestDatabase();
+            $this->db->query("SELECT 1");
+        } catch (\Throwable $e) {
+            $this->markTestSkipped('Database not available: ' . $e->getMessage());
+        }
+    }
+
+    public function testServiceCanBeInstantiated(): void
+    {
+        $svc = new \App\Services\EquipamentoService($this->db);
+        $this->assertInstanceOf(\App\Services\EquipamentoService::class, $svc);
+    }
+
+    public function testExtractCommonDataReturnsAllFields(): void
+    {
+        $svc = new \App\Services\EquipamentoService($this->db);
+        $data = [
+            'status_id' => 1,
+            'procedimento_id' => 2,
+            'regiao_id' => 3,
+            'tipo_id' => 1,
+            'tipo_camera' => 1,
+            'secretaria_id' => 1,
+            'marca_id' => 1,
+            'ip' => '192.168.1.1',
+            'patrimonio' => 'ABC-123',
+        ];
+
+        $fields = $svc->extractCommonData($data);
+
+        $this->assertIsArray($fields);
+        $this->assertEquals(1, $fields['status_id']);
+        $this->assertEquals(2, $fields['procedimento_id']);
+        $this->assertEquals(3, $fields['regiao_id']);
+        $this->assertEquals(1, $fields['tipo_id']);
+        $this->assertEquals(1, $fields['tipo_camera_id']);
+        $this->assertEquals('192.168.1.1', $fields['normalized_ip']);
+        $this->assertEquals('ABC-123', $fields['patrimonio']);
+    }
+
+    public function testExtractCommonDataWithMissingFieldsReturnsDefaults(): void
+    {
+        $svc = new \App\Services\EquipamentoService($this->db);
+        $fields = $svc->extractCommonData([]);
+
+        $this->assertEquals(0, $fields['status_id']);
+        $this->assertNull($fields['normalized_ip']);
+        $this->assertNull($fields['patrimonio']);
+        $this->assertNull($fields['transmissao_id']);
+    }
+
+    public function testBuildEquipDataReturnsCorrectStructure(): void
+    {
+        $svc = new \App\Services\EquipamentoService($this->db);
+        $fields = $svc->extractCommonData([
+            'status_id' => 1,
+            'procedimento_id' => 2,
+            'regiao_id' => 3,
+            'tipo_id' => 1,
+            'secretaria_id' => 1,
+            'marca_id' => 1,
+            'ip' => '10.0.0.1',
+        ]);
+
+        $equipData = $svc->buildEquipData($fields, 1, 1);
+
+        $this->assertArrayHasKey(':tipo_equipamento_id', $equipData);
+        $this->assertArrayHasKey(':status_id', $equipData);
+        $this->assertArrayHasKey(':ip', $equipData);
+        $this->assertArrayHasKey(':local_id', $equipData);
+        $this->assertArrayHasKey(':modelo_id', $equipData);
+        $this->assertEquals(1, $equipData[':tipo_equipamento_id']);
+        $this->assertEquals('10.0.0.1', $equipData[':ip']);
+        $this->assertEquals(1, $equipData[':local_id']);
+    }
+
+    public function testBuildAuditDataContainsRequiredKeys(): void
+    {
+        $svc = new \App\Services\EquipamentoService($this->db);
+        $fields = $svc->extractCommonData([
+            'status_id' => 1,
+            'procedimento_id' => 1,
+            'regiao_id' => 1,
+            'tipo_id' => 1,
+            'secretaria_id' => 1,
+            'marca_id' => 1,
+        ]);
+
+        $audit = $svc->buildAuditData(1, $fields);
+
+        $this->assertArrayHasKey('equipamento_id', $audit);
+        $this->assertArrayHasKey('tipo_equipamento_id', $audit);
+        $this->assertArrayHasKey('status_id', $audit);
+        $this->assertArrayHasKey('ip', $audit);
+        $this->assertArrayHasKey('mosaico', $audit);
+        $this->assertArrayHasKey('coordenadas', $audit);
+        $this->assertEquals(1, $audit['equipamento_id']);
+    }
+
+    public function testResolveClassificacaoEnderecoReturnsNullWhenNoInput(): void
+    {
+        $svc = new \App\Services\EquipamentoService($this->db);
+        $result = $svc->resolveClassificacaoEndereco(null, null);
+        $this->assertNull($result);
+    }
+
+    public function testValidateCoordenadasAcceptsValidFormat(): void
+    {
+        $svc = new \App\Services\EquipamentoService($this->db);
+        $svc->validateCoordenadas('-23.5505, -46.6333');
+        $this->expectNotToPerformAssertions();
+    }
+
+    public function testValidateCoordenadasRejectsInvalidFormat(): void
+    {
+        $svc = new \App\Services\EquipamentoService($this->db);
+
+        $this->expectException(\Exception::class);
+        $svc->validateCoordenadas('invalid-coords');
+    }
+
+    public function testValidateTipoSpecificAcceptsValidTypes(): void
+    {
+        $svc = new \App\Services\EquipamentoService($this->db);
+
+        $svc->validateTipoSpecific(1, '', 0);
+        $this->expectNotToPerformAssertions();
+    }
+
+    public function testValidateTipoSpecificRejectsDvrWithoutModelo(): void
+    {
+        $svc = new \App\Services\EquipamentoService($this->db);
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Informe o modelo do DVR');
+        $svc->validateTipoSpecific(3, '', null);
+    }
+
+    public function testValidateTipoSpecificRejectsTotemWithoutQuantity(): void
+    {
+        $svc = new \App\Services\EquipamentoService($this->db);
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Informe a quantidade de câmeras do Totem');
+        $svc->validateTipoSpecific(4, '', null);
+    }
+
+    public function testParseJsonInputReturnsDecodedArray(): void
+    {
+        $result = \App\Services\EquipamentoService::parseJsonInput('{"conta": 1, "local": "Teste"}');
+
+        $this->assertSame(['conta' => 1, 'local' => 'Teste'], $result);
+    }
+
+    public function testParseJsonInputThrowsOnEmptyRaw(): void
+    {
+        $this->expectException(\Exception::class);
+        \App\Services\EquipamentoService::parseJsonInput('');
+    }
+
+    public function testParseJsonInputThrowsOnInvalidJson(): void
+    {
+        $this->expectException(\Exception::class);
+        \App\Services\EquipamentoService::parseJsonInput('{not json}');
+    }
+
+    public function testParseJsonInputThrowsOnEmptyObject(): void
+    {
+        $this->expectException(\Exception::class);
+        \App\Services\EquipamentoService::parseJsonInput('{}');
+    }
+
+    public function testParseJsonInputThrowsOnOversizedPayload(): void
+    {
+        $_SERVER['CONTENT_LENGTH'] = (string)(10 * 1024 * 1024 + 1);
+        try {
+            $this->expectException(\Exception::class);
+            \App\Services\EquipamentoService::parseJsonInput('{"a": 1}');
+        } finally {
+            unset($_SERVER['CONTENT_LENGTH']);
+        }
+    }
+    public function testExtractCommonDataWithFixtureReturnsExpected(): void
+    {
+        $svc = new \App\Services\EquipamentoService($this->db);
+
+        // Fixture: dados reais de equipamento com todos os campos
+        $data = [
+            "status_id" => 2,
+            "procedimento_id" => 1,
+            "regiao_id" => 1,
+            "tipo_id" => 2,
+            "tipo_camera" => 1,
+            "secretaria_id" => 1,
+            "marca_id" => 1,
+            "ip" => "192.168.15.100",
+            "patrimonio" => "PAT-1234-XYZ",
+            "nome" => "Camera Teste",
+            "descricao" => "Camera de teste para fixtures",
+            "logradouro" => "Rua das Flores",
+            "bairro" => "Centro",
+            "cidade" => "Londrina",
+            "uf" => "PR",
+            "cep" => "86015-120",
+            "numero" => "50",
+            "complemento" => "Apto 101",
+            "telefone" => "44-99999-1234",
+            "email" => "teste@exemplo.com",
+            "coordinates" => "-25.6953, -51.1702",
+            "area_cobertura" => "500",
+            "ativa" => 1,
+            "data_instalacao" => "2023-01-15 10:30:00",
+            "ultima_manutencao" => "2023-06-20 14:00:00",
+            "proximo_manutencao" => "2024-06-20 14:00:00",
+        ];
+
+        $fields = $svc->extractCommonData($data);
+
+        $this->assertIsArray($fields);
+        // Verifica campos críticos
+        $this->assertEquals(2, $fields["status_id"]);
+        $this->assertEquals(1, $fields["procedimento_id"]);
+        $this->assertEquals("192.168.15.100", $fields["normalized_ip"]);
+        $this->assertEquals("PAT-1234-XYZ", $fields["patrimonio"]);
+    }
+    public function testExtractCommonDataWithPartialFieldsReturnsDefaults(): void
+    {
+        $svc = new \App\Services\EquipamentoService($this->db);
+
+        // Fixture: dados mínimos - apenas alguns campos
+        $data = ["status_id" => 1, "secretaria_id" => 1];
+
+        $fields = $svc->extractCommonData($data);
+
+        $this->assertIsArray($fields);
+        $this->assertEquals(1, $fields["status_id"]);
+        $this->assertEquals(1, $fields["secretaria_id"]);
+        $this->assertNull($fields["normalized_ip"]); // default when missing
+    }
+}

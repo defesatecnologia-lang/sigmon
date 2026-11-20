@@ -1,0 +1,202 @@
+<?php use App\Services\NotificacaoService; ?>
+<style nonce="<?= htmlspecialchars($CSP_NONCE ?? '', ENT_QUOTES, 'UTF-8') ?>">
+.navbar .navbar-logo {
+    height: 40px;
+    width: auto;
+}
+</style>
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+    <div class="container">
+        <a class="navbar-brand fw-bold" href="?page=home">
+            <img src="<?= htmlspecialchars(BASE_URL, ENT_QUOTES, 'UTF-8') ?>/images/logo_sigmon.png"
+                 alt="SIGMON" class="navbar-logo">
+        </a>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="?page=home">
+                        <i class="fas fa-home me-1"></i>Dashboard
+                    </a>
+                </li>
+
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-video me-1"></i>Cameras
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="?page=controle&amp;modulo=cameras"><i class="fas fa-gauge-high me-2"></i>Painel de Cameras</a></li>
+                        <li><a class="dropdown-item" href="?page=cadastro_cameras"><i class="fas fa-plus me-2"></i>Cadastro de Cameras</a></li>
+                        <li><a class="dropdown-item" href="?page=listar_cameras"><i class="fas fa-list me-2"></i>Listar Cameras</a></li>
+                        <li><a class="dropdown-item" href="?page=editar_cameras"><i class="fas fa-pen-to-square me-2"></i>Editar Cameras</a></li>
+                        <li><a class="dropdown-item" href="?page=manutencao_cameras"><i class="fas fa-tools me-2"></i>Manutencao de Cameras</a></li>
+                    </ul>
+                </li>
+
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-bell me-1"></i>Alarmes
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="?page=controle&amp;modulo=alarmes"><i class="fas fa-gauge-high me-2"></i>Painel de Alarmes</a></li>
+                        <li><a class="dropdown-item" href="?page=cadastro_alarmes"><i class="fas fa-plus me-2"></i>Cadastro de Alarmes</a></li>
+                        <li><a class="dropdown-item" href="?page=listar_alarmes"><i class="fas fa-list me-2"></i>Listar Alarmes</a></li>
+                        <li><a class="dropdown-item" href="?page=editar_alarmes"><i class="fas fa-pen-to-square me-2"></i>Editar Alarmes</a></li>
+                        <li><a class="dropdown-item" href="?page=manutencao_alarmes"><i class="fas fa-tools me-2"></i>Manutencao de Alarmes</a></li>
+                    </ul>
+                </li>
+
+                <?php if ($_SESSION['usuario']->nivel_acesso === 'admin' || $_SESSION['usuario']->nivel_acesso === 'supervisor') : ?>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-chart-column me-1"></i>Relatorios
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="?page=relatorios_cameras"><i class="fas fa-camera me-2"></i>Relatorios de Cameras</a></li>
+                        <li><a class="dropdown-item" href="?page=relatorios_alarmes"><i class="fas fa-bell me-2"></i>Relatorios de Alarmes</a></li>
+                    </ul>
+                </li>
+                <?php endif; ?>
+
+                <?php if ($_SESSION['usuario']->nivel_acesso === 'admin' || $_SESSION['usuario']->nivel_acesso === 'supervisor') : ?>
+                    <?php
+                    try {
+                        $notifService = new NotificacaoService();
+                        $notifUsuarioSecId = getUsuarioSecretariaId();
+                        $notifNivel = resolveUserAccessLevel($_SESSION['usuario'] ?? null);
+                        $notifSecId = ($notifNivel === 'user' && $notifUsuarioSecId !== null) ? $notifUsuarioSecId : null;
+                        $notifCount = $notifService->getCountNaoLidas($notifSecId);
+                    } catch (Throwable $e) {
+                        $notifCount = 0;
+                    }
+                    ?>
+                <li class="nav-item">
+                    <a class="nav-link position-relative" href="?page=notificacoes">
+                        <i class="fas fa-bell me-1"></i>Notificações
+                        <?php if ($notifCount > 0) : ?>
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                            <?= $notifCount < 100 ? $notifCount : '99+' ?>
+                        </span>
+                        <?php endif; ?>
+                    </a>
+                </li>
+                <?php endif; ?>
+
+                <?php if ($_SESSION['usuario']->nivel_acesso === 'admin' || $_SESSION['usuario']->nivel_acesso === 'supervisor') : ?>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-cog me-1"></i>Administracao
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="?page=administracao"><i class="fas fa-gauge-high me-2"></i>Painel</a></li>
+                        <?php if ($_SESSION['usuario']->nivel_acesso === 'admin') : ?>
+                        <li><a class="dropdown-item" href="?page=cadastroUsuario"><i class="fas fa-user-plus me-2"></i>Cadastro de Usuarios</a></li>
+                        <li><a class="dropdown-item" href="?page=listarUsuario"><i class="fas fa-users me-2"></i>Listar Usuarios</a></li>
+                        <?php endif; ?>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="?page=listar_locais"><i class="fas fa-map-marker-alt me-2"></i>Listar Locais</a></li>
+                        <li><a class="dropdown-item" href="?page=cadastro_locais"><i class="fas fa-plus me-2"></i>Cadastro de Local</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="?page=listar_tipo&tipo=escola"><i class="fas fa-school me-2"></i>Escolas</a></li>
+                        <li><a class="dropdown-item" href="?page=listar_tipo&tipo=cmei"><i class="fas fa-child me-2"></i>CMEIs</a></li>
+                        <li><a class="dropdown-item" href="?page=listar_tipo&tipo=cei"><i class="fas fa-baby me-2"></i>CEIs</a></li>
+                        <li><a class="dropdown-item" href="?page=listar_tipo&tipo=cras"><i class="fas fa-hand-holding-heart me-2"></i>CRAS</a></li>
+                        <li><a class="dropdown-item" href="?page=listar_tipo&tipo=caps"><i class="fas fa-brain me-2"></i>CAPS</a></li>
+                        <li><a class="dropdown-item" href="?page=listar_operadoras"><i class="fas fa-network-wired me-2"></i>Operadoras / Links</a></li>
+                        <li><a class="dropdown-item" href="?page=listar_tipo&tipo=proprios"><i class="fas fa-building me-2"></i>Proprios Publicos</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><h6 class="dropdown-header">Tabelas Lookup</h6></li>
+                        <li><a class="dropdown-item" href="?page=admin_tabelas"><i class="fas fa-th-list me-2"></i>Painel de Tabelas</a></li>
+                        <li><a class="dropdown-item" href="?page=admin_tabelas&tabela=secretarias"><i class="fas fa-building me-2"></i>Secretarias</a></li>
+                        <li><a class="dropdown-item" href="?page=admin_tabelas&tabela=regioes"><i class="fas fa-map me-2"></i>Regioes</a></li>
+                        <li><a class="dropdown-item" href="?page=admin_tabelas&tabela=tipos_locais"><i class="fas fa-tag me-2"></i>Tipos de Local</a></li>
+                        <li><a class="dropdown-item" href="?page=admin_tabelas&tabela=tipos_equipamento"><i class="fas fa-cogs me-2"></i>Tipos de Equipamento</a></li>
+                        <li><a class="dropdown-item" href="?page=admin_tabelas&tabela=marcas"><i class="fas fa-industry me-2"></i>Marcas</a></li>
+                        <li><a class="dropdown-item" href="?page=admin_tabelas&tabela=status"><i class="fas fa-flag me-2"></i>Status</a></li>
+                    </ul>
+                </li>
+                <?php endif; ?>
+            </ul>
+
+            <div class="navbar-nav">
+                <!-- Dark Mode Toggle -->
+                <button 
+                  id="themeToggle" 
+                  class="btn btn-outline-light ms-2" 
+                  aria-label="Alternar modo escuro/claro"
+                  title="Modo escuro"
+                  type="button">
+                  <i class="fas fa-moon"></i>
+                </button>
+
+                <?php if (isset($_SESSION['usuario'])) : ?>
+                <div class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-user-circle me-1"></i>
+                        <strong><?= htmlspecialchars($_SESSION['usuario']->usuario ?? '', ENT_QUOTES, 'UTF-8') ?></strong>
+                        <?php if (isset($_SESSION['usuario']->senha_temporaria) && $_SESSION['usuario']->senha_temporaria === 1) : ?>
+                        <span class="badge bg-warning ms-1">Trocar Senha</span>
+                        <?php endif; ?>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                            <span class="dropdown-item-text text-muted small">
+                                <i class="fas fa-user me-1"></i>
+                                <?= htmlspecialchars($_SESSION['usuario']->nome ?? $_SESSION['usuario']->usuario, ENT_QUOTES, 'UTF-8') ?>
+                            </span>
+                        </li>
+                        <li>
+                            <span class="dropdown-item-text text-muted small">
+                                <i class="fas fa-shield-alt me-1"></i>
+                                <?= htmlspecialchars($_SESSION['usuario']->nivel_acesso ?? 'user', ENT_QUOTES, 'UTF-8') ?>
+                                <?php if (($_SESSION['usuario']->nivel_acesso ?? '') === 'supervisor') : ?>
+                                <span class="badge bg-info ms-1">Supervisor</span>
+                                <?php endif; ?>
+                            </span>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="?page=alterar_senha">
+                                <i class="fas fa-key me-1"></i>Alterar Senha
+                            </a>
+                        </li>
+                        <?php if (isset($_SESSION['usuario']->senha_temporaria) && $_SESSION['usuario']->senha_temporaria === 1) : ?>
+                        <li>
+                            <a class="dropdown-item text-warning" href="?page=trocar_senha">
+                                <i class="fas fa-exclamation-triangle me-1"></i>Trocar Senha (Obrigatoria)
+                            </a>
+                        </li>
+                        <?php endif; ?>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <form id="navbarLogoutForm" method="post" action="?page=action_logout" class="px-2 py-1">
+                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(getCsrfToken(), ENT_QUOTES, 'UTF-8') ?>">
+                                <button type="submit" class="dropdown-item">
+                                    <i class="fas fa-sign-out-alt me-1"></i>Sair
+                                </button>
+                            </form>
+                        </li>
+                    </ul>
+                </div>
+                <?php else : ?>
+                <a class="nav-link" href="?page=login">
+                    <i class="fas fa-sign-in-alt me-1"></i>Login
+                </a>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<?php if (isset($_SESSION['usuario']) && isset($_SESSION['usuario']->senha_temporaria) && $_SESSION['usuario']->senha_temporaria === 1) : ?>
+<div class="alert alert-warning alert-dismissible fade show mb-0 text-center" role="alert">
+    <i class="fas fa-exclamation-triangle me-2"></i>
+    <strong>Alerta de Seguranca:</strong> Voce esta usando uma senha temporaria.
+    <a href="?page=trocar_senha" class="alert-link">Clique aqui para definir sua senha permanente</a>.
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+<?php endif; ?>
