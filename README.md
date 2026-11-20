@@ -64,7 +64,7 @@ Sistema web para gerenciamento centralizado de câmeras de segurança e centrais
 ### 1. Clonar e instalar dependências
 
 ```bash
-git clone https://github.com/elciomsantos/sigmon.git
+git clone https://github.com/defesatecnologia-lang/sigmon.git
 cd sigmon
 
 # Instalar dependências PHP

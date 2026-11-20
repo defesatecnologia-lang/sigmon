@@ -59,7 +59,7 @@ services:
 
   app:
     # Imagem do registry GHCR (build no CD) OU build local.
-    image: ghcr.io/${GITHUB_REPOSITORY:-elciomsantos/sigmon}:${APP_TAG:-latest}
+    image: ghcr.io/${GITHUB_REPOSITORY:-defesatecnologia-lang/sigmon}:${APP_TAG:-latest}
     build:
       context: .
       dockerfile: docker/Dockerfile.nginx
