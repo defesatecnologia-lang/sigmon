@@ -1,6 +1,7 @@
 # Relatório de Prontidão para Produção — Sistema de Câmeras e Alarmes v1.0
 
 **Data:** 2026-09-11
+**Atualizado em:** 2026-11-20 (cenário confirmado: **intranet/rede interna**)
 **Analista:** Revisão automatizada (agente) + auditorias prévias do repositório
 **Branch:** `main` (commit `eaf56f4`, "feat: anotações pessoais e O.S. em aberto no relatório diário")
 
@@ -171,8 +172,10 @@ concluídos e validados.
 - [x] **C-4 resolvido**: `config/DB/cftv_gml.sql:87-92` — os 3 usuários default
       (`admin`/`supervisor`/`usuario`) agora têm `senha_temporaria=1`, forçando a
       troca de senha no primeiro login (o fluxo já existe em `action_login_submit.php:35`).
-- [ ] 3.4 **Pendente (P2/decisão de infra)** — TLS/HTTPS: o compose prod só expõe
-      porta 80; exige terminação TLS externa (LB/Nginx/Certbot) antes de produção pública.
+- [x] 3.4 **TLS resolvido para intranet** — `docker-compose.prod.yml` publica 80
+      (301 → HTTPS) e 443; o Nginx gera certificado self-signed quando não há CA montada.
+      Decisão registrada em `docs/ADR_SEGURANCA.md`. Para exposição pública, substituir
+      por certificado de CA confiável.
 
 ### Fase 4 — Testes / estático / audit ✅ CONCLUÍDA
 
@@ -181,8 +184,8 @@ Suíte reproduzida em container PHP 8.4 (com `pdo_mysql` + MySQL 8.0 de teste):
 | Check | Resultado |
 |-------|-----------|
 | PHPStan (nível 5) | ✅ 0 erros (após correção) |
-| PHPUnit | ✅ 194 testes, 398 assertions, **0 falhas**, 20 skipped (ambientais `tests/Api`), 58 notices (deprecations PHP 8.4) |
-| Vitest (frontend) | ✅ 12 arquivos, 91 testes |
+| PHPUnit | ✅ 197 testes, 355 assertions, **0 falhas**, 38 skipped (ambientais), 60 notices (deprecations) |
+| Vitest (frontend) | ✅ 16 arquivos, 104 testes |
 | Build Vite (prod) | ✅ self-host + Brotli + Font Awesome local |
 | npm audit | ✅ 0 vulnerabilidades |
 
@@ -190,7 +193,8 @@ Suíte reproduzida em container PHP 8.4 (com `pdo_mysql` + MySQL 8.0 de teste):
 
 - **C-5** (média): `vendor/bin/phpstan` acusou 1 erro real — condição redundante `if ($rotate)` em `inc/security.php:212` (o ramo `$rotate === false` já retorna antes). Corrigida para chamada incondicional `rotateCsrfToken()`.
 - **C-6** (média): `config/app.php` e `inc/security.php` usavam `ini_set('session.sid_length', '48')` e `session.sid_bits_per_character`, **deprecated/removidos no PHP 8.4**. O warning virava output ("headers already sent") e, com o ErrorHandler agressivo, quebrava o bootstrap do PHPUnit. Removidos (PHP 8.4 já usa SID seguro de 96 bits por padrão).
-- **Nota README desatualizada**: README afirma "176+ testes"; hoje são **194 testes PHP + 91 testes JS**.
+- **Nota README desatualizada**: README afirma "176+ testes"; em 2026-11-20 são
+  **197 testes PHP + 104 testes JS** (0 falhas em ambos).
 
 ### Fase 5 — Segurança pendências (F-102/103/104) ✅ CONCLUÍDA
 
@@ -212,8 +216,9 @@ Ações P2 que dependem de decisão de infraestrutura do cliente (não executáv
       em `config/sentry.php`, condicional a `isProduction()`).
 - [ ] 6.2 Configurar cron de backup diário: `scripts/backup.sh` já existe (MySQL).
 - [ ] 6.3 Configurar monitoramento de recursos no host (CPU/mem/disco).
-- [ ] 6.4 **TLS/HTTPS**: o compose prod expõe apenas porta 80; exige terminação TLS
-      externa (LB/Nginx/Certbot) antes de expor publicamente.
+- [x] 6.4 **TLS/HTTPS**: compose prod publica 80 → 301 → 443 com self-signed
+      automático. Aceito para intranet; instalar CA interna nos clientes para
+      remover o aviso de certificado (ou CA pública se virar exposição externa).
 
 Scripts de operação já presentes e validados no repo: `scripts/backup.sh`,
 `scripts/check-opcache.php`, `scripts/optimize-database.php`, `scripts/run_migrations.php`.
@@ -235,9 +240,14 @@ Scripts de operação já presentes e validados no repo: `scripts/backup.sh`,
 C-3 (porta parametrizada), C-4 (senha_temporaria no seed), C-5 (condição redundante),
 C-6 (session.sid_length deprecated).
 
-**Pendência de infraestrutura (única barreira ao go-live público):**
-HTTPS/TLS — o sistema está pronto tecnicamente; falta terminação TLS externa e
-definição de `SENTRY_DSN`/backup/monitoramento pelo operador.
+**Situação para intranet (2026-11-20):** o sistema está **tecnicamente pronto**.
+O stack prod foi subido e validado novamente: 301 → HTTPS, `/` e `api_ping` 200,
+`api_health` 401, `api_dashboard` autenticado 200, `.env`/`config/` 403, headers
+CSP/HSTS presentes, login com senha temporária e `Pending: 0` nas migrations.
+
+**Pendências apenas de operação do servidor (não bloqueiam intranet):**
+`SENTRY_DSN`, cron de backup e alertas de CPU/mem/disco. Para exposição pública,
+substituir o certificado self-signed por CA confiável.
 
 - [x] 1.1 `.env.prod.example` criado (consistente com `docker-compose.prod.yml`)
       e permitido no `.gitignore`.
@@ -274,3 +284,19 @@ Esses itens **não estavam documentados** antes e bloqueavam o go-live:
 > **Nota:** o container dev local (`sistema-cameras-v10-app`) e o stack de staging
 > usados nas validações foram derrubados após os testes; artefatos de teste (`.env`,
 > `docker-compose.prod.override.yml`) foram removidos.
+
+---
+
+## 10. Correções pós-validação (2026-11-20 — intranet)
+
+| ID | Severidade | Achado | Correção |
+|----|-----------|--------|----------|
+| **C-7** | 🟠 Alta | Fresh boot retornava **500 por ~20–30 s**: o healthcheck `mysqladmin ping -h localhost` usava socket e ficava `healthy` durante o servidor temporário do `docker-entrypoint` (porta 0); o app subia antes do MySQL final | Healthcheck agora usa **TCP + consulta à tabela `usuarios`** com `start_period: 30s`; o PHP também tem retry configurável (`DB_CONNECT_MAX_ATTEMPTS=10`, `DB_CONNECT_RETRY_DELAY_MS=500`) |
+| **C-8** | 🟡 Baixa | `migrate.php --status` imprimia `Total: 4 | Applied: 11 | Pending: 0` (11 = 4 PHP + 7 legadas `.sql`) | `Applied` passa a contar somente migrations PHP conhecidas; legadas são exibidas em nota separada |
+
+Também alinhado: `APP_ALLOWED_ORIGINS` agora é propagado explicitamente ao container
+(vazio = mesma origem) e documentado em `.env.prod.example`; a decisão de TLS para
+intranet foi formalizada em `docs/ADR_SEGURANCA.md`.
+
+**Revalidação:** stack prod subiu com volume novo, aguardou o MySQL ficar realmente
+pronto e passou no smoke (301/200/401/403 + login + migrations). Nenhum 500 na subida.

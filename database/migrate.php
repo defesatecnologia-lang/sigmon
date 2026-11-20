@@ -40,9 +40,14 @@ if (in_array('--status', $args, true)) {
         echo "{$status} {$name}\n";
     }
 
+    $appliedPhp = array_values(array_intersect(array_keys($files), $applied));
     $pendingCount = count(array_diff(array_keys($files), $applied));
     echo str_repeat('-', 60) . "\n";
-    echo "Total: " . count($files) . " | Applied: " . count($applied) . " | Pending: {$pendingCount}\n";
+    echo "Total: " . count($files) . " | Applied: " . count($appliedPhp) . " | Pending: {$pendingCount}\n";
+    $legacyCount = count($applied) - count($appliedPhp);
+    if ($legacyCount > 0) {
+        echo "Nota: {$legacyCount} migration(s) legada(s) .sql registrada(s) no schema.\n";
+    }
     exit(0);
 }
 

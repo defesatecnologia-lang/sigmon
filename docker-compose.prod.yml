@@ -32,11 +32,15 @@ services:
       # Ajuste DB_DATA_PATH no .env se o ponto de montagem for diferente.
       - ${DB_DATA_PATH:-/mnt/sstv-dados/mysql}:/var/lib/mysql
       - ./config/DB/cftv_gml.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    # Healthcheck por TCP + tabela real: o mysqladmin -h localhost usa socket e
+    # ficava "healthy" durante o servidor temporario de init (porta 0), fazendo
+    # o app subir cedo e responder 500 ate o MySQL final iniciar (C-7).
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysql -h 127.0.0.1 -u \"$$MYSQL_USER\" -D \"$$MYSQL_DATABASE\" -e 'SELECT 1 FROM usuarios LIMIT 1' >/dev/null 2>&1"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 30
+      start_period: 30s
     networks:
       - backend
     # Hardening: nao-root (mysql UID 999), capabilities minimas, read-only onde possivel
@@ -82,6 +86,11 @@ services:
       SIGMON_SESSION_ABSOLUTE_TIMEOUT: 28800
       SIGMON_CSP_ALLOW_INLINE_STYLES: 0
       SENTRY_DSN: ${SENTRY_DSN:-}
+      # Origens CORS permitidas. Vazio = somente a propria origem (recomendado em intranet).
+      APP_ALLOWED_ORIGINS: ${APP_ALLOWED_ORIGINS:-}
+      # Tolerancia a indisponibilidade transitoria do MySQL (reinicio/subida inicial).
+      DB_CONNECT_MAX_ATTEMPTS: ${DB_CONNECT_MAX_ATTEMPTS:-10}
+      DB_CONNECT_RETRY_DELAY_MS: ${DB_CONNECT_RETRY_DELAY_MS:-500}
       # Confiar no proxy Nginx (container app) para headers X-Forwarded-For.
       # Defina em .env para listar os IPs reais dos load balancers (vazio = nenhum).
       PROXY_TRUSTED_IPS: ${PROXY_TRUSTED_IPS:-}

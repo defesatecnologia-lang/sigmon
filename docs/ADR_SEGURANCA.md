@@ -1,4 +1,4 @@
-# ADR — Decisões de Segurança (F-102, F-103, F-104)
+# ADR — Decisões de Segurança (F-102, F-103, F-104, TLS/CORS intranet)
 
 **Data:** 2026-09-11
 **Contexto:** fechamento dos achados remanescentes da auditoria de segurança
@@ -54,3 +54,34 @@ SMTP estiver disponível; mover a exibição da senha para um canal mais seguro.
 | F-102 | Nenhum | Resolvido |
 | F-103 | Supervisor com acesso amplo (por design) | Aceito por negócio |
 | F-104 | Senha temporária em sessão (admin) | Aceito; SMTP como melhoria P2 |
+
+---
+
+## ADR-005 — TLS self-signed e CORS em intranet (2026-11-20)
+
+**Contexto:** o sistema será implantado em **rede interna/intranet**, sem exposição
+pública. O `docker-compose.prod.yml` publica HTTP (301 -> HTTPS) e HTTPS; quando não
+há certificado no volume `nginx_certs`, o entrypoint gera um certificado self-signed.
+
+**Decisão:** aceitar o certificado self-signed para o go-live em intranet. Recomenda-se
+instalar a CA interna nos clientes (ou copiar `server.crt`/`server.key` para o volume)
+para eliminar o aviso do navegador. Se o sistema passar a ser exposto externamente,
+substituir por certificado de CA pública é **obrigatório** antes da exposição.
+
+**CORS:** `APP_ALLOWED_ORIGINS` fica vazio por padrão, mantendo o comportamento
+restrito à própria origem. A variável agora é propagada explicitamente ao container e
+documentada em `.env.prod.example`.
+
+**Status: ACEITO para intranet.**
+
+## ADR-006 — Resiliência no boot do MySQL (C-7, 2026-11-20)
+
+**Contexto:** com volume novo, o healthcheck por socket do MySQL ficava `healthy`
+durante o servidor temporário de inicialização; o app subia nessa janela e respondia
+500 por ~20-30 s.
+
+**Decisão:** healthcheck por **TCP + consulta à tabela `usuarios`** (`start_period: 30s`)
+e retry de conexão no PHP (`DB_CONNECT_MAX_ATTEMPTS`, `DB_CONNECT_RETRY_DELAY_MS`). O
+padrão local/CI continua 1 tentativa, sem impacto em testes.
+
+**Status: CORRIGIDO e revalidado com volume novo.**
