@@ -8,6 +8,12 @@
 
 > O CD publica a imagem, mas não conecta ao servidor. O deploy é executado localmente no servidor pelo script abaixo.
 
+Se o job de publicação do GHCR falhar com `permission_denied` ou `write_package`,
+configure o secret `GHCR_TOKEN` nas configurações do repositório. Use um Personal
+Access Token classic com permissão `write:packages` de uma conta autorizada a
+publicar pacotes na organização. O token é usado somente no login do GHCR; não o
+adicione ao código nem o compartilhe nos logs.
+
 ## TLS por padrão (intranet)
 
 O container `app` termina TLS no próprio Nginx:
