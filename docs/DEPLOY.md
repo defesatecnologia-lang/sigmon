@@ -1,11 +1,12 @@
-# Deploy — CD via GitHub Actions
+# Deploy — GitHub Actions e servidor
 
 ## Fluxo
 
-1. Push de tag `v*` → job CD builda a imagem Docker (`docker/Dockerfile.nginx`) e publica em `ghcr.io/<repo>/sigmon` (tags semver + sha).
-2. Push na `main` → CI executa lint, composer/npm audit, build Docker (Nginx) e Trivy (sem publicar).
+1. Depois que o CI da branch `main` termina com sucesso, o CD lê `VERSION`, cria a tag `vX.Y.Z`, publica o GitHub Release e envia as imagens versionada, `major.minor`, `latest` e SHA ao GHCR.
+2. Se a tag/release da versão já existir, o workflow não a recria nem republica.
+3. Para cada nova release, incremente `VERSION` (formato `vX.Y.Z`) antes de mesclar as mudanças em `main`.
 
-> **Nota:** o CD **não** executa deploy automático via SSH. O pull e restart no servidor é feito manualmente (ver "Atualização manual" abaixo). O job `deploy` do workflow apenas publica a imagem no GHCR.
+> O CD publica a imagem, mas não conecta ao servidor. O deploy é executado localmente no servidor pelo script abaixo.
 
 ## TLS por padrão (intranet)
 
@@ -111,6 +112,9 @@ sudo usermod -aG docker $USER
 # Baixar docker-compose.prod.yml e .env de exemplo do repositório
 curl -O https://raw.githubusercontent.com/defesatecnologia-lang/sigmon/main/docker-compose.prod.yml
 curl -o .env.prod.example https://raw.githubusercontent.com/defesatecnologia-lang/sigmon/main/.env.prod.example
+mkdir -p scripts/server
+curl -o scripts/server/deploy.sh https://raw.githubusercontent.com/defesatecnologia-lang/sigmon/main/scripts/server/deploy.sh
+chmod +x scripts/server/deploy.sh
 cp .env.prod.example .env
 # editar .env com senhas e DB_DATA_PATH
 
@@ -198,12 +202,7 @@ Se der `404`, a imagem em execução é antiga: rode `up -d --build` novamente.
 
 ### Tag automática (rodapé)
 
-A versão exibida no rodapé vem da variável `APP_RELEASE_TAG` embutida na imagem pelo
-CD. Ao publicar uma tag `v*`, o pipeline:
-
-- cria/atualiza o GitHub Release;
-- publica a imagem nas tags `v*`, `major.minor`, `latest` e SHA;
-- registra a própria tag `v*` como versão da aplicação.
+A versão exibida no rodapé vem da variável `APP_RELEASE_TAG` embutida na imagem pelo CD. O arquivo `VERSION` é a fonte da versão e a tag correspondente é criada automaticamente quando `main` é atualizada.
 
 Para atualizações pelo servidor, configure `.env` assim:
 
@@ -212,24 +211,21 @@ APP_TAG=latest
 APP_VERSION=
 ```
 
-Depois disso, atualize o sistema pelos comandos da seção abaixo.
+Depois disso, execute o script no servidor para atualizar o sistema.
 
-## Atualização manual (servidor)
+## Atualização pelo script (servidor)
 
-Após publicar uma nova imagem no GHCR (via tag `v*`), atualize o servidor:
+Com o repositório disponível em `/opt/sigmon`, execute:
 
 ```bash
 cd /opt/sigmon
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d
+./scripts/server/deploy.sh
 ```
 
-Ou, apontando para uma tag específica:
+O script baixa a imagem `latest`, recria o container da aplicação e espera ficar saudável. Para usar uma versão fixa:
 
 ```bash
-# No REPOSITORY ghcr.io, defina APP_TAG (default: latest)
-APP_TAG=v1.0.1 docker compose -f docker-compose.prod.yml up -d
+./scripts/server/deploy.sh v1.2.3
 ```
 
-> **Nota:** o compose usa `image: ghcr.io/defesatecnologia-lang/sigmon:${APP_TAG:-latest}`.
-> Defina `GITHUB_REPOSITORY` para apontar para outro repositório GHCR.
+O usuário que executa o script precisa ter acesso ao Docker. Se a imagem do GHCR for privada, faça `docker login ghcr.io` antes.

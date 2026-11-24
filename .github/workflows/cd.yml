@@ -1,25 +1,38 @@
 name: CD
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_run:
+    workflows: ["CI / Security Scan"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  deploy:
-    name: Build & Push Docker Image
+  release:
+    name: Create release and publish image
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
-      packages: write
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main'
+      )
 
     steps:
-      - uses: actions/checkout@v7
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
@@ -28,39 +41,69 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
-            type=sha
+      - name: Create release tag from VERSION
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          if [[ ! "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::VERSION must contain a semantic version such as v1.2.3; got '$VERSION'."
+            exit 1
+          fi
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+          VERSION_NUMBER="${VERSION#v}"
+          IFS='.' read -r MAJOR MINOR _ <<< "$VERSION_NUMBER"
 
-      - name: Build and push
+          if git show-ref --verify --quiet "refs/tags/${VERSION}"; then
+            RELEASE_SHA="$(git rev-parse "${VERSION}^{commit}")"
+            if gh release view "$VERSION" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+              echo "Release ${VERSION} already exists; skipping."
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "Release ${VERSION} is missing; publishing it from its existing tag."
+              git checkout "$VERSION"
+              echo "publish=true" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            RELEASE_SHA="$(git rev-parse HEAD)"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$VERSION" "$RELEASE_SHA" -m "Release ${VERSION}"
+            git push origin "refs/tags/${VERSION}"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "semver_minor=${MAJOR}.${MINOR}" >> "$GITHUB_OUTPUT"
+          echo "release_sha=${RELEASE_SHA:-$(git rev-parse "${VERSION}^{commit}")}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push Docker image
+        if: steps.release.outputs.publish == 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile.nginx
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.release.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.release.outputs.semver_minor }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ steps.release.outputs.release_sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.release.outputs.version }}
           build-args: |
-            APP_VERSION=${{ github.ref_name }}
+            APP_VERSION=${{ steps.release.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Create or update GitHub Release
+      - name: Create GitHub Release
+        if: steps.release.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
-            gh release edit "${{ github.ref_name }}" --generate-notes
-          else
-            gh release create "${{ github.ref_name }}" --generate-notes --verify-tag
-          fi
+          gh release create "${{ steps.release.outputs.version }}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --generate-notes \
+            --verify-tag
