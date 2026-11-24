@@ -4,6 +4,23 @@ requererAcesso('user');
 ?>
 
 <?php vite_page_css('home-dashboard'); ?>
+<style nonce="<?= htmlspecialchars($CSP_NONCE ?? '', ENT_QUOTES, 'UTF-8') ?>">
+/* Fallback inline: mantem o banner do dashboard no tamanho correto mesmo se o
+   CSS externo da pagina estiver em cache antigo ou bloqueado. */
+.user-welcome-logo {
+    height: 88px !important;
+    max-height: 88px !important;
+    width: auto !important;
+    max-width: 100% !important;
+    display: block !important;
+}
+@media (max-width: 768px) {
+    .user-welcome-logo {
+        height: 56px !important;
+        max-height: 56px !important;
+    }
+}
+</style>
 
 <div class="container-fluid mt-3">
     <!-- Boas-vindas do usuario -->
@@ -11,7 +28,8 @@ requererAcesso('user');
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
             <div class="d-flex align-items-center flex-wrap gap-3">
                 <img src="<?= htmlspecialchars(BASE_URL, ENT_QUOTES, 'UTF-8') ?>/images/Logo_banner_sigmon.png"
-                     alt="SIGMON — Dashboard do Sistema" class="user-welcome-logo">
+                     alt="SIGMON — Dashboard do Sistema" class="user-welcome-logo"
+                     width="2172" height="724">
                 <p class="mb-0 fs-5">Bem-vindo,
                     <strong><?= htmlspecialchars($_SESSION['usuario']->nome ?? 'Usuário', ENT_QUOTES, 'UTF-8') ?></strong>!
                 </p>
