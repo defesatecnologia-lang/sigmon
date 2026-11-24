@@ -156,9 +156,15 @@ df -h "${DB_DATA_PATH:-/mnt/sstv-sigmon/mysql}"
 
 Causas comuns:
 
+- **inicialização lenta em RAID6**: `initialize` + import do schema levou ~5 min e o healthcheck antigo (180s) marcava o `db` como `unhealthy` antes do MySQL abrir a porta 3306. O compose agora usa `start_period: 360s` — basta atualizar o compose e subir de novo;
 - diretório de dados sem `chown -R 999:999` (uid do MySQL no container) ou sem espaço;
 - `.env` editado **depois** da primeira inicialização — `MYSQL_USER`/`MYSQL_PASSWORD` só são criados quando o diretório está vazio;
 - import do `cftv_gml.sql` falhou (veja `ERROR 1418` acima): o healthcheck espera `SELECT 1 FROM usuarios`, então o banco nunca fica healthy se a tabela não existe.
+
+> Os `[ERROR] Event Scheduler ... Query execution was interrupted` no log durante
+> o `Stopping temporary server` são esperados: os eventos do schema estavam
+> ativos enquanto o entrypoint encerrava o servidor temporário. Não indicam
+> falha na importação.
 
 Se for instalação nova e o diretório não contém dados a preservar:
 
