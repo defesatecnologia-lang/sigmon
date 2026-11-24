@@ -318,9 +318,17 @@ jobs:
             exit 0
           fi
 
-          gh pr create \
+          if ! CREATE_OUTPUT="$(gh pr create \
             --repo "${{ github.repository }}" \
             --head fix/dev-development \
             --base main \
             --title "fix: atualiza fluxo de releases e preparação da produção" \
-            --body "Atualiza o fluxo de releases e preparação para produção após validação completa da branch \`fix/dev-development\`. Todos os testes, auditorias e builds bloqueantes passaram no CI."
+            --body "Atualiza o fluxo de releases e preparação para produção após validação completa da branch \`fix/dev-development\`. Todos os testes, auditorias e builds bloqueantes passaram no CI." 2>&1)"; then
+            printf '%s\n' "$CREATE_OUTPUT"
+            if [[ "$CREATE_OUTPUT" == *"GitHub Actions is not permitted to create or approve pull requests"* ]]; then
+              echo "::warning::PR não criado pelo workflow. Habilite a criação de PRs pelo GitHub Actions ou configure PULL_REQUEST_TOKEN."
+              exit 0
+            fi
+            exit 1
+          fi
+          printf '%s\n' "$CREATE_OUTPUT"
