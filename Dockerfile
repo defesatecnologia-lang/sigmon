@@ -73,7 +73,7 @@ WORKDIR /var/www/html
 EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD curl -sf http://localhost:80/ || exit 1
+    CMD ["curl", "-sf", "http://localhost:80/"]
 
 
 # ============================================
@@ -92,7 +92,7 @@ RUN sed -i 's/Listen 80/Listen 5000/' /etc/apache2/ports.conf \
 EXPOSE 5000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD curl -sf http://localhost:5000/ || exit 1
+    CMD ["curl", "-sf", "http://localhost:5000/"]
 
 # xdebug para depuracao em desenvolvimento (opcional, nao-fatal)
 RUN pecl install xdebug 2>/dev/null \
@@ -151,6 +151,6 @@ RUN mkdir -p storage/ratelimit storage/cep_cache public/uploads \
 
 ENV SIGMON_ENV=production
 
-USER www-data
+USER 33:33
 
 CMD ["apache2-foreground"]

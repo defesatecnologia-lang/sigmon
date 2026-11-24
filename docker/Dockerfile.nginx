@@ -25,6 +25,9 @@ LABEL org.opencontainers.image.licenses="MIT"
 
 ARG DEBIAN_FRONTEND=noninteractive
 
+# RUN com pipe (curl | gpg, printf | sha256sum) exige pipefail.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 # Nginx 1.30.x do repo oficial: 1.30.7 corrige CVE-2026-123007/123633
 # (HTTP/2) e CVE-2026-125283; 1.30.8 corrige CVE-2026-132779 (ssl_early_data).
 # Atualizar NGINX_VERSION, o checksum do tarball e os commits do modulo abaixo
@@ -64,26 +67,29 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
 # Compila-se ngx_http_brotli_static_module contra a mesma versao instalada.
 ARG NGX_BROTLI_COMMIT=53e0fb55f250f48fe80c0ddbf6c0f7103cdbaae1
 ARG BROTLI_COMMIT=db24a98aed38a16de78cc05ca15cdd8dc2a0d92d
+WORKDIR /tmp
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential libbrotli-dev libpcre2-dev zlib1g-dev git \
-    && cd /tmp \
     && curl -fsSLO "https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz" \
     && printf '%s  %s\n' 'f867314ada32e717b949930859656c48a72dc6657aec598db58af2f98a40e1c1' "nginx-${NGINX_VERSION}.tar.gz" \
         | sha256sum -c - \
-    && tar xzf "nginx-${NGINX_VERSION}.tar.gz" \
-    && git clone -q https://github.com/google/ngx_brotli.git \
-    && cd /tmp/ngx_brotli \
-    && git checkout -q "$NGX_BROTLI_COMMIT" \
-    && git submodule update --init -q \
-    && cd deps/brotli \
-    && git checkout -q "$BROTLI_COMMIT" \
-    && cd "/tmp/nginx-${NGINX_VERSION}" \
-    && ./configure --with-compat --add-dynamic-module=/tmp/ngx_brotli \
+    && mkdir -p /tmp/nginx-src \
+    && tar xzf "nginx-${NGINX_VERSION}.tar.gz" -C /tmp/nginx-src --strip-components=1 \
+    && git clone -q https://github.com/google/ngx_brotli.git /tmp/ngx_brotli \
+    && git -C /tmp/ngx_brotli checkout -q "$NGX_BROTLI_COMMIT" \
+    && git -C /tmp/ngx_brotli submodule update --init -q \
+    && git -C /tmp/ngx_brotli/deps/brotli checkout -q "$BROTLI_COMMIT" \
+    && rm -rf /var/lib/apt/lists/*
+
+# O configure do Nginx usa auto/*.sh relativos: precisa rodar dentro da fonte.
+WORKDIR /tmp/nginx-src
+RUN ./configure --with-compat --add-dynamic-module=/tmp/ngx_brotli \
     && make modules -j"$(nproc)" \
-    && cp objs/ngx_http_brotli_static_module.so /etc/nginx/modules/ \
-    && cd / \
-    && rm -rf /tmp/ngx_brotli "/tmp/nginx-${NGINX_VERSION}" "/tmp/nginx-${NGINX_VERSION}.tar.gz" \
+    && cp objs/ngx_http_brotli_static_module.so /etc/nginx/modules/
+
+WORKDIR /
+RUN rm -rf /tmp/ngx_brotli /tmp/nginx-src "/tmp/nginx-${NGINX_VERSION}.tar.gz" \
     && apt-get purge -y build-essential libbrotli-dev libpcre2-dev zlib1g-dev git \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -153,9 +159,9 @@ RUN rm -f /etc/nginx/sites-enabled/default \
 EXPOSE 8080 8443
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD curl -kfsS https://localhost:8443/ || exit 1
+    CMD ["curl", "-kfsS", "https://localhost:8443/"]
 
-# Rodar como www-data (nao root) — nginx master + php-fpm
-USER www-data
+# Rodar como uid 33 (www-data, nao root) — nginx master + php-fpm
+USER 33:33
 
 CMD ["/usr/local/bin/nginx-entrypoint.sh"]
