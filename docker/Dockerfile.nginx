@@ -25,10 +25,11 @@ LABEL org.opencontainers.image.licenses="MIT"
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-# Nginx 1.30.x do repo oficial (corrige CVE-2026-123007 e CVE-2026-123633, HTTP/2).
+# Nginx 1.30.x do repo oficial: 1.30.7 corrige CVE-2026-123007/123633
+# (HTTP/2) e CVE-2026-125283; 1.30.8 corrige CVE-2026-132779 (ssl_early_data).
 # Atualizar NGINX_VERSION, o checksum do tarball e os commits do modulo abaixo
 # em conjunto quando uma nova versao 1.30 for publicada.
-ARG NGINX_VERSION=1.30.7
+ARG NGINX_VERSION=1.30.8
 
 # apt-get upgrade aplica atualizacoes de seguranca dos pacotes ja presentes na
 # imagem base (ex.: linux-libc-dev), evitando CVEs abertos no Trivy image scan.
@@ -68,7 +69,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential libbrotli-dev libpcre2-dev zlib1g-dev git \
     && cd /tmp \
     && curl -fsSLO "https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz" \
-    && printf '%s  %s\n' '2565b5c837050e958f70fb0f73c48e2bca4542ad349fd356f46fb0c72610bc6e' "nginx-${NGINX_VERSION}.tar.gz" \
+    && printf '%s  %s\n' 'f867314ada32e717b949930859656c48a72dc6657aec598db58af2f98a40e1c1' "nginx-${NGINX_VERSION}.tar.gz" \
         | sha256sum -c - \
     && tar xzf "nginx-${NGINX_VERSION}.tar.gz" \
     && git clone -q https://github.com/google/ngx_brotli.git \
