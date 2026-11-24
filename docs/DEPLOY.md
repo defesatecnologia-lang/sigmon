@@ -12,7 +12,9 @@ Se o job de publicação do GHCR falhar com `permission_denied` ou `write_packag
 configure o secret `GHCR_TOKEN` nas configurações do repositório. Use um Personal
 Access Token classic com permissão `write:packages` de uma conta autorizada a
 publicar pacotes na organização. O token é usado somente no login do GHCR; não o
-adicione ao código nem o compartilhe nos logs.
+adicione ao código nem o compartilhe nos logs. Se o PAT pertence a um usuário
+diferente de quem iniciou o workflow, configure também o secret `GHCR_USERNAME`
+com o nome desse usuário no GitHub.
 
 ## TLS por padrão (intranet)
 
