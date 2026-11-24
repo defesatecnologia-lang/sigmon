@@ -179,6 +179,23 @@ docker compose -f docker-compose.prod.yml up -d --build
 > ⛔ O `rm -rf` acima apaga todo o banco. Em servidor com dados, faça backup
 > (`scripts/backup.sh`) e corrija apenas permissões/credenciais.
 
+### Ícones do menu/grid não aparecem
+
+O CSS do Font Awesome referencia `assets/webfonts/fa-solid-900.woff2`. As
+webfonts são geradas pelo `npm run build` em `public/assets/webfonts/` e são
+**gitignored** — por isso precisam ser copiadas do stage de build para a imagem
+final (já feito no `Dockerfile.nginx`).
+
+Para conferir no servidor:
+
+```bash
+docker compose -f docker-compose.prod.yml exec app ls -la /var/www/html/public/assets/webfonts
+curl -k -o /dev/null -w '%{http_code}\n' https://localhost:8000/assets/webfonts/fa-solid-900.woff2
+# esperado: 200
+```
+
+Se der `404`, a imagem em execução é antiga: rode `up -d --build` novamente.
+
 ## Atualização manual (servidor)
 
 Após publicar uma nova imagem no GHCR (via tag `v*`), atualize o servidor:

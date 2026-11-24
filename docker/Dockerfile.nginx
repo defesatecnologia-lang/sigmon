@@ -110,6 +110,11 @@ RUN composer install --no-interaction --optimize-autoloader --classmap-authorita
 # dist/assets/ para public/assets/ — docroot do Nginx serve /assets/*).
 COPY --from=build /app/dist/ dist/
 COPY --from=build /app/dist/assets/ public/assets/
+# Webfonts self-host e lista de precache sao gerados no postbuild e gitignored.
+# Sem este COPY o CSS do Font Awesome aponta para /assets/webfonts/*.woff2,
+# o Nginx responde 404 e os icones do menu/grid nao renderizam.
+COPY --from=build /app/public/assets/webfonts/ public/assets/webfonts/
+COPY --from=build /app/public/sw-assets.json public/sw-assets.json
 
 # Configuracoes PHP
 RUN echo "memory_limit = 256M" > /usr/local/etc/php/conf.d/memory.ini \
