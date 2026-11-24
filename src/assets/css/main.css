@@ -996,6 +996,36 @@ html {
     display: none !important;
   }
 }
+/* ===== NAVBAR LOGO ===== */
+/* Tambem existe um <style nonce> em inc/navbar.php. Manter a regra no CSS
+   compilado garante o tamanho mesmo se o estilo inline for bloqueado por CSP
+   (ou se o navegador servir uma versao antiga do HTML via cache). */
+.navbar .navbar-logo {
+  height: 40px !important;
+  max-height: 40px !important;
+  width: auto !important;
+  display: inline-block;
+}
+
+/* ===== LOGIN IMAGES ===== */
+.page-login .login-logo {
+  display: block !important;
+  width: 55px !important;
+  max-width: 85% !important;
+  height: auto !important;
+  margin: 0 auto 20px !important;
+}
+
+.page-login .login-banner {
+  display: block !important;
+  width: 100% !important;
+  max-width: 860px !important;
+  max-height: 20vh !important;
+  height: auto !important;
+  object-fit: contain;
+  margin: 0 auto !important;
+}
+
 /* ===== FOOTER LOGO ===== */
 footer .footer-logo {
   height: 28px !important;
