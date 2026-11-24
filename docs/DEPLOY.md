@@ -235,6 +235,37 @@ alterar o `.env` a cada release.
 > prioridade e o rodapé **não** acompanha o `VERSION`. O script avisa quando
 > isso acontece.
 
+### Dados proprietários (`proprios-pml.sql`)
+
+`config/DB/private/proprios-pml.sql` contém os locais/propriedades de Londrina e
+é **gitignored** — ele precisa existir no servidor (copie do seu ambiente local
+se necessário):
+
+```bash
+scp config/DB/private/proprios-pml.sql \
+  usuario@servidor:/opt/sistemas/sigmon/config/DB/private/
+```
+
+- **Banco novo:** o compose monta o diretório `private/` em `/sigmon-private` e
+  o hook `docker/initdb/02-proprios-pml.sh` em
+  `/docker-entrypoint-initdb.d/`. Na primeira inicialização, após o schema, o
+  hook importa o SQL se o arquivo existir.
+- **Banco já existente:** o entrypoint do MySQL **não** roda novamente. O
+  `deploy.sh` faz a importação de forma idempotente: registra o hash do arquivo
+  na tabela `sigmon_seed_control` e só importa quando ele muda (ou na primeira
+  vez). Não duplica dados em deploys repetidos.
+
+Conferindo no servidor:
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T db sh -c '
+MYSQL_PWD="$MYSQL_PASSWORD" mysql -N -B -u "$MYSQL_USER" "$MYSQL_DATABASE" \
+  -e "SELECT COUNT(*) FROM locais; SELECT arquivo, sha256 FROM sigmon_seed_control;"'
+```
+
+> Se o SQL estiver ausente, o deploy continua normalmente e apenas avisa que
+> pulou a importação.
+
 ## Atualização manual (servidor)
 
 Após publicar uma nova imagem no GHCR (via tag `v*`), atualize o servidor:
