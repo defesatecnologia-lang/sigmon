@@ -28,6 +28,9 @@ export default {
             /^alert-/, /^badge-/, /^card-/, /^form-/,
             /^table-/, /^text-/, /^bg-/, /^border-/,
             /^offset-/, /^col-/, /^row/, /^g-/,
+            // Rede de seguranca: mesmo se o contexto de build mudar, os
+            // glyphs dos icones e as imagens de marca nao podem ser removidos.
+            /fa-/, /logo/, /banner/, /card-icon/,
           ],
         },
       }),

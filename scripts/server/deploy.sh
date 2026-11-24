@@ -148,6 +148,18 @@ for pattern in 'fontawesome-*.css' 'home-dashboard-*.css' 'main-*.css'; do
         "https://localhost:${HTTPS_PORT}${ASSET_URL}" || true)"
     echo "    ${ASSET_URL}: HTTP ${ASSET_CODE}"
     [[ "$ASSET_CODE" == "200" ]] || echo "AVISO: ${ASSET_URL} com HTTP ${ASSET_CODE}."
+
+    # O PurgeCSS ja removeu os glyphs dos icones em producao porque o stage de
+    # build do Docker nao copiava os diretorios PHP. Verificar o conteudo do CSS
+    # evita que um deploy "200 OK" esconda icones ausentes novamente.
+    if [[ "$pattern" == 'fontawesome-*.css' && "$ASSET_CODE" == "200" ]]; then
+        if curl -k -s "https://localhost:${HTTPS_PORT}${ASSET_URL}" \
+            | grep -q 'fa-user-shield'; then
+            echo "    glyphs dos icones presentes no CSS."
+        else
+            fail "CSS do Font Awesome sem os glyphs (fa-user-shield ausente)."
+        fi
+    fi
 done
 
 HTTP_CODE="$(curl -k -s -o /dev/null -w '%{http_code}' \
