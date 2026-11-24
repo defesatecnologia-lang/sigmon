@@ -135,9 +135,24 @@ docker compose -f "$COMPOSE_FILE" exec -T app \
 
 HTTPS_PORT="$(sed -n 's/^APP_HTTPS_PORT=//p' .env | tail -n 1 | tr -d "\"' \r")"
 HTTPS_PORT="${HTTPS_PORT:-443}"
+
+for pattern in 'fontawesome-*.css' 'home-dashboard-*.css' 'main-*.css'; do
+    ASSET_FILE="$(docker compose -f "$COMPOSE_FILE" exec -T app \
+        sh -c "ls /var/www/html/public/assets/${pattern} 2>/dev/null | head -n 1" | tr -d '\r')"
+    if [[ -z "$ASSET_FILE" ]]; then
+        echo "AVISO: nenhum arquivo ${pattern} no container."
+        continue
+    fi
+    ASSET_URL="/assets/$(basename "$ASSET_FILE")"
+    ASSET_CODE="$(curl -k -s -o /dev/null -w '%{http_code}' \
+        "https://localhost:${HTTPS_PORT}${ASSET_URL}" || true)"
+    echo "    ${ASSET_URL}: HTTP ${ASSET_CODE}"
+    [[ "$ASSET_CODE" == "200" ]] || echo "AVISO: ${ASSET_URL} com HTTP ${ASSET_CODE}."
+done
+
 HTTP_CODE="$(curl -k -s -o /dev/null -w '%{http_code}' \
     "https://localhost:${HTTPS_PORT}/assets/webfonts/fa-solid-900.woff2" || true)"
-echo "    webfonts HTTP ${HTTP_CODE} (esperado 200)"
+echo "    /assets/webfonts/fa-solid-900.woff2: HTTP ${HTTP_CODE}"
 [[ "$HTTP_CODE" == "200" ]] || echo "AVISO: webfonts com HTTP ${HTTP_CODE}; verifique o Nginx/apps."
 
 echo "    VERSION (repo): $(cat VERSION 2>/dev/null || echo dev)"
