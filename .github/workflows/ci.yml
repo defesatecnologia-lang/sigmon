@@ -300,7 +300,10 @@ jobs:
     steps:
       - name: Create or confirm pull request
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Recomenda-se PULL_REQUEST_TOKEN com permissão Contents: read e
+          # Pull requests: write. Sem ele, o GITHUB_TOKEN só funciona quando a
+          # criação de PR por Actions estiver habilitada nas configurações do repo.
+          GH_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN || github.token }}
         run: |
           if gh pr view fix/dev-development --repo "${{ github.repository }}" --base main >/dev/null 2>&1; then
             echo "PR fix/dev-development -> main já existe."
