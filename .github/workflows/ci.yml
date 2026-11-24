@@ -13,6 +13,7 @@ permissions:
   contents: read
   security-events: write
   actions: read
+  pull-requests: write
 
 jobs:
   php-deps:
@@ -280,3 +281,35 @@ jobs:
             exit 1
           fi
           echo "All blocking security checks passed!"
+
+  create-main-pr:
+    name: Create PR for main
+    runs-on: ubuntu-latest
+    needs: [php-deps, node-deps, tests, docker-build, hadolint]
+    if: >
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/fix/dev-development' &&
+      needs.php-deps.result == 'success' &&
+      needs.node-deps.result == 'success' &&
+      needs.tests.result == 'success' &&
+      needs.docker-build.result == 'success' &&
+      needs.hadolint.result == 'success'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Create or confirm pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh pr view fix/dev-development --repo "${{ github.repository }}" --base main >/dev/null 2>&1; then
+            echo "PR fix/dev-development -> main já existe."
+            exit 0
+          fi
+
+          gh pr create \
+            --repo "${{ github.repository }}" \
+            --head fix/dev-development \
+            --base main \
+            --title "fix: atualiza fluxo de releases e preparação da produção" \
+            --body "Atualiza o fluxo de releases e preparação para produção após validação completa da branch \`fix/dev-development\`. Todos os testes, auditorias e builds bloqueantes passaram no CI."

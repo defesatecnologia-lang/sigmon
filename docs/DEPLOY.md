@@ -196,75 +196,23 @@ curl -k -o /dev/null -w '%{http_code}\n' https://localhost:8000/assets/webfonts/
 
 Se der `404`, a imagem em execução é antiga: rode `up -d --build` novamente.
 
-## Atualização via script (recomendado)
-
-O repositório inclui `scripts/server/deploy.sh`, exclusivo do SIGMON:
-
-```bash
-cd /opt/sistemas/sigmon
-./scripts/server/deploy.sh              # usa origin/main (padrão)
-./scripts/server/deploy.sh fix/dev-development   # branch específica
-```
-
-O script:
-
-1. faz `git fetch origin --prune` e `git reset --hard origin/<branch>`;
-2. roda `docker compose -f docker-compose.prod.yml up -d --build`;
-3. espera o container `app` ficar `healthy` (ajuste com `DEPLOY_HEALTH_TIMEOUT`);
-4. valida as webfonts e exibe a tag final.
-
-> O `reset --hard` descarta alterações **versionadas** no checkout. `.env`,
-> volumes do MySQL/uploads e certificados não são afetados.
-
 ### Tag automática (rodapé)
 
-A versão mostrada no rodapé vem de `APP_VERSION`; se estiver vazia, o PHP lê o
-arquivo `VERSION` do repositório. Para tag automática, deixe **ambas** assim no
-`.env`:
+A versão exibida no rodapé vem da variável `APP_RELEASE_TAG` embutida na imagem pelo
+CD. Ao publicar uma tag `v*`, o pipeline:
+
+- cria/atualiza o GitHub Release;
+- publica a imagem nas tags `v*`, `major.minor`, `latest` e SHA;
+- registra a própria tag `v*` como versão da aplicação.
+
+Para atualizações pelo servidor, configure `.env` assim:
 
 ```env
-APP_TAG=
+APP_TAG=latest
 APP_VERSION=
 ```
 
-Depois disso, para publicar uma nova versão basta editar `VERSION` no repo,
-fazer merge/push e rodar `./scripts/server/deploy.sh`. Não é mais necessário
-alterar o `.env` a cada release.
-
-> Se `APP_VERSION` ou `APP_TAG` estiverem preenchidos no `.env`, eles têm
-> prioridade e o rodapé **não** acompanha o `VERSION`. O script avisa quando
-> isso acontece.
-
-### Dados proprietários (`proprios-pml.sql`)
-
-`config/DB/private/proprios-pml.sql` contém os locais/propriedades de Londrina e
-é **gitignored** — ele precisa existir no servidor (copie do seu ambiente local
-se necessário):
-
-```bash
-scp config/DB/private/proprios-pml.sql \
-  usuario@servidor:/opt/sistemas/sigmon/config/DB/private/
-```
-
-- **Banco novo:** o compose monta o diretório `private/` em `/sigmon-private` e
-  o hook `docker/initdb/02-proprios-pml.sh` em
-  `/docker-entrypoint-initdb.d/`. Na primeira inicialização, após o schema, o
-  hook importa o SQL se o arquivo existir.
-- **Banco já existente:** o entrypoint do MySQL **não** roda novamente. O
-  `deploy.sh` faz a importação de forma idempotente: registra o hash do arquivo
-  na tabela `sigmon_seed_control` e só importa quando ele muda (ou na primeira
-  vez). Não duplica dados em deploys repetidos.
-
-Conferindo no servidor:
-
-```bash
-docker compose -f docker-compose.prod.yml exec -T db sh -c '
-MYSQL_PWD="$MYSQL_PASSWORD" mysql -N -B -u "$MYSQL_USER" "$MYSQL_DATABASE" \
-  -e "SELECT COUNT(*) FROM locais; SELECT arquivo, sha256 FROM sigmon_seed_control;"'
-```
-
-> Se o SQL estiver ausente, o deploy continua normalmente e apenas avisa que
-> pulou a importação.
+Depois disso, atualize o sistema pelos comandos da seção abaixo.
 
 ## Atualização manual (servidor)
 
