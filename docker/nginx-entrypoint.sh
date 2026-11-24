@@ -44,6 +44,9 @@ server {
     listen 8443 ssl default_server;
     server_name _;
 
+    # HTTP/2 desligado explicitamente (superficie dos CVEs 2026 de HTTP/2).
+    http2 off;
+
     ssl_certificate     $CERT_FILE;
     ssl_certificate_key $KEY_FILE;
     ssl_protocols       TLSv1.2 TLSv1.3;

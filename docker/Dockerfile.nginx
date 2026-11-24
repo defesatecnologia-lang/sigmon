@@ -25,18 +25,66 @@ LABEL org.opencontainers.image.licenses="MIT"
 
 ARG DEBIAN_FRONTEND=noninteractive
 
+# Nginx 1.30.x do repo oficial: 1.30.7 corrige CVE-2026-123007/123633
+# (HTTP/2) e CVE-2026-125283; 1.30.8 corrige CVE-2026-132779 (ssl_early_data).
+# Atualizar NGINX_VERSION, o checksum do tarball e os commits do modulo abaixo
+# em conjunto quando uma nova versao 1.30 for publicada.
+ARG NGINX_VERSION=1.30.8
+
 # apt-get upgrade aplica atualizacoes de seguranca dos pacotes ja presentes na
 # imagem base (ex.: linux-libc-dev), evitando CVEs abertos no Trivy image scan.
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
-        nginx curl openssl libpng-dev libzip-dev libonig-dev \
+        curl gnupg2 ca-certificates \
+    && mkdir -p /root/.gnupg && chmod 700 /root/.gnupg \
+    && curl -fsSL https://nginx.org/keys/nginx_signing.key \
+        | gpg --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg \
+    && gpg --dry-run --quiet --no-keyring --import --import-options import-show \
+        /usr/share/keyrings/nginx-archive-keyring.gpg \
+        | grep -q '573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62' \
+    && echo 'deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://nginx.org/packages/debian trixie nginx' \
+        > /etc/apt/sources.list.d/nginx.list \
+    && printf 'Package: *\nPin: origin nginx.org\nPin: release o=nginx\nPin-Priority: 900\n' \
+        > /etc/apt/preferences.d/99nginx \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        nginx openssl libpng-dev libzip-dev libonig-dev \
         libxml2-dev libcurl4-openssl-dev pkg-config libssl-dev \
-        libbrotli-dev libnginx-mod-http-brotli-static \
         locales \
+    && test "$(nginx -v 2>&1 | sed -n 's|.*nginx/\([0-9.]*\).*|\1|p')" = "$NGINX_VERSION" \
     && sed -i 's/# pt_BR.UTF-8/pt_BR.UTF-8/' /etc/locale.gen \
     && locale-gen pt_BR.UTF-8 \
     && docker-php-ext-install pdo_mysql mbstring zip gd xml curl \
     && pecl install apcu && docker-php-ext-enable apcu \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# O repo nginx.org nao publica modulo Brotli pronto e o pacote Debian
+# (libnginx-mod-http-brotli-static) e incompativel com a ABI do nginx 1.30.
+# Compila-se ngx_http_brotli_static_module contra a mesma versao instalada.
+ARG NGX_BROTLI_COMMIT=53e0fb55f250f48fe80c0ddbf6c0f7103cdbaae1
+ARG BROTLI_COMMIT=db24a98aed38a16de78cc05ca15cdd8dc2a0d92d
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential libbrotli-dev libpcre2-dev zlib1g-dev git \
+    && cd /tmp \
+    && curl -fsSLO "https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz" \
+    && printf '%s  %s\n' 'f867314ada32e717b949930859656c48a72dc6657aec598db58af2f98a40e1c1' "nginx-${NGINX_VERSION}.tar.gz" \
+        | sha256sum -c - \
+    && tar xzf "nginx-${NGINX_VERSION}.tar.gz" \
+    && git clone -q https://github.com/google/ngx_brotli.git \
+    && cd /tmp/ngx_brotli \
+    && git checkout -q "$NGX_BROTLI_COMMIT" \
+    && git submodule update --init -q \
+    && cd deps/brotli \
+    && git checkout -q "$BROTLI_COMMIT" \
+    && cd "/tmp/nginx-${NGINX_VERSION}" \
+    && ./configure --with-compat --add-dynamic-module=/tmp/ngx_brotli \
+    && make modules -j"$(nproc)" \
+    && cp objs/ngx_http_brotli_static_module.so /etc/nginx/modules/ \
+    && cd / \
+    && rm -rf /tmp/ngx_brotli "/tmp/nginx-${NGINX_VERSION}" "/tmp/nginx-${NGINX_VERSION}.tar.gz" \
+    && apt-get purge -y build-essential libbrotli-dev libpcre2-dev zlib1g-dev git \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
