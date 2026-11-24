@@ -35,11 +35,11 @@ docker compose -f docker-compose.prod.yml restart app
 sudo mkdir -p /opt/sigmon
 sudo chown $USER:$USER /opt/sigmon
 
-# Disco externo para dados do MySQL (ajuste o ponto de montagem conforme o servidor)
+# Particao dedicada para dados do MySQL (RAID6 montada em /mnt/sstv-sigmon).
 # O container do MySQL roda como uid/gid 999.
-sudo mkdir -p /mnt/sstv-dados/mysql
-sudo chown -R 999:999 /mnt/sstv-dados/mysql
-sudo chmod 750 /mnt/sstv-dados/mysql
+sudo mkdir -p /mnt/sstv-sigmon/mysql
+sudo chown -R 999:999 /mnt/sstv-sigmon/mysql
+sudo chmod 750 /mnt/sstv-sigmon/mysql
 
 # Estrutura esperada em /opt/sigmon
 /opt/sigmon/
@@ -50,7 +50,7 @@ sudo chmod 750 /mnt/sstv-dados/mysql
         └── cftv_gml.sql       # schema inicial (cópia do repo)
 ```
 
-> **Dados do banco:** `docker-compose.prod.yml` monta `${DB_DATA_PATH:-/mnt/sstv-dados/mysql}` em `/var/lib/mysql` (não usa volume nomeado). Garanta que `/mnt/sstv-dados` esteja montado (ex.: entrada em `/etc/fstab`) antes de subir os containers. O `01-schema.sql` em `docker-entrypoint-initdb.d` só é executado quando o diretório de dados está vazio (primeira inicialização).
+> **Dados do banco:** `docker-compose.prod.yml` monta `${DB_DATA_PATH:-/mnt/sstv-sigmon/mysql}` em `/var/lib/mysql` (não usa volume nomeado). Garanta que `/mnt/sstv-sigmon` esteja montado (ex.: entrada em `/etc/fstab`) antes de subir os containers. O `01-schema.sql` em `docker-entrypoint-initdb.d` só é executado quando o diretório de dados está vazio (primeira inicialização).
 
 ## Arquivo `.env`
 
@@ -62,8 +62,8 @@ DB_PASS=senha_usuario_forte
 DB_NAME=cftv_gml
 DB_USER=cftv_user
 
-# Caminho dos dados do MySQL no host (disco externo)
-DB_DATA_PATH=/mnt/sstv-dados/mysql
+# Caminho dos dados do MySQL no host (particao dedicada RAID6)
+DB_DATA_PATH=/mnt/sstv-sigmon/mysql
 
 # Acesso HTTPS/HTTP no host (defaults: 443 / 80)
 APP_PORT=80

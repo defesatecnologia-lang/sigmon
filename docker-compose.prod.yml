@@ -28,9 +28,9 @@ services:
       MYSQL_PASSWORD: ${DB_PASS:?DB_PASS required}
     # DB acessivel apenas na rede interna (backend), nao publicado no host
     volumes:
-      # Dados do MySQL em disco externo (Ubuntu Server: /mnt/sstv-dados).
+      # Dados do MySQL em particao dedicada (RAID6 montada em /mnt/sstv-sigmon).
       # Ajuste DB_DATA_PATH no .env se o ponto de montagem for diferente.
-      - ${DB_DATA_PATH:-/mnt/sstv-dados/mysql}:/var/lib/mysql
+      - ${DB_DATA_PATH:-/mnt/sstv-sigmon/mysql}:/var/lib/mysql
       - ./config/DB/cftv_gml.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     # Healthcheck por TCP + tabela real: o mysqladmin -h localhost usa socket e
     # ficava "healthy" durante o servidor temporario de init (porta 0), fazendo
