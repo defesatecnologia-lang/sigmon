@@ -63,7 +63,7 @@ unset($_SESSION['error']);
     min-height: 0;
     height: auto;
     object-fit: contain;
-    margin: 0 auto;
+    margin: 0 auto 42mm;
 }
 
 .page-login .login-input {
