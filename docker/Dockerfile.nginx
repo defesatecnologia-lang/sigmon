@@ -12,6 +12,15 @@ COPY vite.config.ts tsconfig.json postcss.config.js ./
 COPY src/ src/
 COPY public/ public/
 COPY scripts/ scripts/
+# O PurgeCSS (postcss.config.js) escaneia os arquivos PHP para decidir quais
+# classes manter. Sem estes diretorios no contexto de build, todas as classes
+# usadas apenas nos templates (.fa-*, .navbar-logo, .user-welcome-logo,
+# .login-banner, ...) eram removidas do CSS de producao — resultando em icones
+# ausentes e imagens sem tamanho definido.
+COPY resources/ resources/
+COPY inc/ inc/
+COPY auth/ auth/
+COPY accounts/ accounts/
 RUN npm run build
 
 # ============================================
