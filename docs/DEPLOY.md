@@ -196,6 +196,45 @@ curl -k -o /dev/null -w '%{http_code}\n' https://localhost:8000/assets/webfonts/
 
 Se der `404`, a imagem em execução é antiga: rode `up -d --build` novamente.
 
+## Atualização via script (recomendado)
+
+O repositório inclui `scripts/server/deploy.sh`, exclusivo do SIGMON:
+
+```bash
+cd /opt/sistemas/sigmon
+./scripts/server/deploy.sh              # usa origin/main (padrão)
+./scripts/server/deploy.sh fix/dev-development   # branch específica
+```
+
+O script:
+
+1. faz `git fetch origin --prune` e `git reset --hard origin/<branch>`;
+2. roda `docker compose -f docker-compose.prod.yml up -d --build`;
+3. espera o container `app` ficar `healthy` (ajuste com `DEPLOY_HEALTH_TIMEOUT`);
+4. valida as webfonts e exibe a tag final.
+
+> O `reset --hard` descarta alterações **versionadas** no checkout. `.env`,
+> volumes do MySQL/uploads e certificados não são afetados.
+
+### Tag automática (rodapé)
+
+A versão mostrada no rodapé vem de `APP_VERSION`; se estiver vazia, o PHP lê o
+arquivo `VERSION` do repositório. Para tag automática, deixe **ambas** assim no
+`.env`:
+
+```env
+APP_TAG=
+APP_VERSION=
+```
+
+Depois disso, para publicar uma nova versão basta editar `VERSION` no repo,
+fazer merge/push e rodar `./scripts/server/deploy.sh`. Não é mais necessário
+alterar o `.env` a cada release.
+
+> Se `APP_VERSION` ou `APP_TAG` estiverem preenchidos no `.env`, eles têm
+> prioridade e o rodapé **não** acompanha o `VERSION`. O script avisa quando
+> isso acontece.
+
 ## Atualização manual (servidor)
 
 Após publicar uma nova imagem no GHCR (via tag `v*`), atualize o servidor:
