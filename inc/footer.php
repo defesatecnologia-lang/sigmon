@@ -1,8 +1,8 @@
 <?php
-// Versao de deploy: variavel de ambiente tem prioridade sobre o arquivo VERSION.
-$versaoDeploy = getenv('APP_VERSION');
-if ($versaoDeploy === false || trim((string) $versaoDeploy) === '') {
-    $versaoDeploy = getenv('APP_RELEASE_TAG');
+// A versao embutida na imagem identifica o release realmente implantado.
+$versaoDeploy = getenv('APP_RELEASE_TAG');
+if ($versaoDeploy === false || trim((string) $versaoDeploy) === '' || trim((string) $versaoDeploy) === 'dev') {
+    $versaoDeploy = getenv('APP_VERSION');
 }
 if ($versaoDeploy === false || trim((string) $versaoDeploy) === '' || trim((string) $versaoDeploy) === 'dev') {
     $arquivoVersao = dirname(__DIR__) . '/VERSION';
