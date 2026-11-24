@@ -68,15 +68,23 @@ if ($viteMainJs) :
 <script nonce="<?= htmlspecialchars($CSP_NONCE ?? '', ENT_QUOTES, 'UTF-8') ?>">
   // Registrar Service Worker para PWA support
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('<?= htmlspecialchars($APP_BASE_PATH ?? '', ENT_QUOTES, 'UTF-8') ?>/sw.js')
+    const serviceWorkerUrl = '<?= htmlspecialchars($APP_BASE_PATH ?? '', ENT_QUOTES, 'UTF-8') ?>/sw.js';
+    navigator.serviceWorker.register(serviceWorkerUrl, { updateViaCache: 'none' })
       .then(registration => {
         console.log('Service Worker registered');
         registration.active?.postMessage({ type: 'INIT_BASE_URL', baseUrl: '<?= htmlspecialchars($APP_BASE_PATH ?? '', ENT_QUOTES, 'UTF-8') ?>' });
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-          navigator.serviceWorker.controller?.postMessage({ type: 'INIT_BASE_URL', baseUrl: '<?= htmlspecialchars($APP_BASE_PATH ?? '', ENT_QUOTES, 'UTF-8') ?>' });
-        });
+        const update = () => registration.update().catch(() => {});
+        update();
+        window.setInterval(update, 15 * 60 * 1000);
       })
       .catch(error => console.warn('Service Worker registration failed:', error));
+
+    if (navigator.serviceWorker.controller) {
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        navigator.serviceWorker.controller?.postMessage({ type: 'INIT_BASE_URL', baseUrl: '<?= htmlspecialchars($APP_BASE_PATH ?? '', ENT_QUOTES, 'UTF-8') ?>' });
+        window.location.reload();
+      }, { once: true });
+    }
   }
 </script>
 <?php if (!in_array($CURRENT_PAGE ?? '', ['login', 'recuperar_senha'], true)) : ?>

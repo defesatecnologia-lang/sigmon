@@ -35,13 +35,6 @@ services:
       # Ajuste DB_DATA_PATH no .env se o ponto de montagem for diferente.
       - ${DB_DATA_PATH:-/mnt/sstv-sigmon/mysql}:/var/lib/mysql
       - ./config/DB/cftv_gml.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      # Dados proprietarios de Londrina (arquivo local, gitignored). O diretorio
-      # sempre existe no repo, entao o compose nao falha se o SQL estiver ausente.
-      - ./config/DB/private:/sigmon-private:ro
-      # Hook de init: so importa se o arquivo existir e ainda nao tiver sido
-      # aplicado (tabela sigmon_seed_control). Tambem usado pelo deploy.sh em
-      # bancos ja existentes, onde o entrypoint nao roda novamente.
-      - ./docker/initdb/02-proprios-pml.sh:/docker-entrypoint-initdb.d/02-proprios-pml.sh:ro
     # Healthcheck por TCP + tabela real: o mysqladmin -h localhost usa socket e
     # ficava "healthy" durante o servidor temporario de init (porta 0), fazendo
     # o app subir cedo e responder 500 ate o MySQL final iniciar (C-7).
@@ -96,10 +89,9 @@ services:
       DB_USER: ${DB_USER:-cftv_user}
       DB_PASS: ${DB_PASS:?DB_PASS required}
       APP_TIMEZONE: America/Sao_Paulo
-      # Tag exibida no rodape. Se APP_VERSION e APP_TAG estiverem vazios no
-      # .env, o valor fica vazio e inc/footer.php le o arquivo VERSION do repo
-      # (tag automatica, sem editar .env a cada release).
-      APP_VERSION: ${APP_VERSION:-${APP_TAG:-}}
+      # Override opcional da versao exibida no rodape. Quando vazio, o PHP usa
+      # APP_RELEASE_TAG, embutida na imagem pelo pipeline da tag v*.
+      APP_VERSION: ${APP_VERSION:-}
       SIGMON_SESSION_TIMEOUT: 3600
       SIGMON_SESSION_ABSOLUTE_TIMEOUT: 28800
       SIGMON_CSP_ALLOW_INLINE_STYLES: 0

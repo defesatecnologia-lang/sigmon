@@ -162,6 +162,8 @@ RUN mkdir -p storage/ratelimit storage/cep_cache public/uploads \
     && chmod -R 755 storage public/uploads
 
 ENV SIGMON_ENV=production
+ARG APP_VERSION=dev
+ENV APP_RELEASE_TAG=$APP_VERSION
 
 # Remover default do Nginx (evitar conflito)
 RUN rm -f /etc/nginx/sites-enabled/default \
