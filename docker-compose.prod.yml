@@ -15,6 +15,9 @@ name: sigmon
 
 services:
   db:
+    # MySQL 8.4 LTS (tag flutuante -> ultimo patch, atualmente 8.4.x).
+    # Nao existe tag oficial "mysql:8.5"; "mysql:lts" hoje aponta para 9.7
+    # (major diferente) e nao deve ser usado sem migracao testada.
     image: mysql:8.4
     restart: unless-stopped
     # log-bin-trust-function-creators=1: necessario para criar a funcao
@@ -74,6 +77,8 @@ services:
       - "${APP_HTTPS_PORT:-443}:8443"
     environment:
       SIGMON_ENV: production
+      # Usado pelo entrypoint do Nginx no redirect HTTP -> HTTPS (porta publica).
+      APP_HTTPS_PORT: ${APP_HTTPS_PORT:-443}
       DB_HOST: db
       DB_PORT: 3306
       DB_NAME: ${DB_NAME:-cftv_gml}

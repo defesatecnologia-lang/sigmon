@@ -28,6 +28,29 @@ docker compose -f docker-compose.prod.yml restart app
 - Os clientes devem confiar na CA interna (ou aceitar o self-signed).
 - Cookies de sessão são `Secure` (o Nginx detecta `$https` automaticamente).
 
+## Portas customizadas (ex.: acesso em `https://ip:8000`)
+
+Quando o servidor hospeda vários sistemas, ajuste apenas o `.env` — não é preciso editar o compose:
+
+```env
+APP_PORT=8001        # HTTP (apenas redirect) -> container 8080
+APP_HTTPS_PORT=8000  # HTTPS (aplicação) -> container 8443
+```
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+curl -k https://localhost:8000/
+```
+
+O redirect `HTTP -> HTTPS` gerado pelo entrypoint usa `APP_HTTPS_PORT`, então
+`http://ip:8001` vai para `https://ip:8000/` (e não para `https://ip/` na porta
+443, onde pode estar outro sistema). Se `APP_HTTPS_PORT=443`, o redirect fica
+sem porta, como no padrão.
+
+> **MySQL:** use `mysql:8.4` (LTS). Não existe tag oficial `mysql:8.5`; a tag
+> `mysql:lts` atualmente aponta para `9.7` (major diferente) e só deve ser
+> adotada após migração e testes.
+
 ## Pré-requisitos no servidor (Ubuntu Server)
 
 ```bash
@@ -118,6 +141,37 @@ docker compose -f docker-compose.prod.yml ps   # db + app healthy
 curl -k https://localhost/                     # 200 (front controller)
 curl -I http://localhost/                      # 301 -> https
 ```
+
+### `sigmon-db-1` unhealthy na primeira subida
+
+Se o `db` fica `unhealthy` e o `app` não inicia (`condition: service_healthy`),
+colete antes de mudar qualquer coisa:
+
+```bash
+docker compose -f docker-compose.prod.yml logs --tail=200 db
+docker inspect --format '{{json .State.Health}}' sigmon-db-1 | jq -r '.Log[-1].Output'
+ls -ld "${DB_DATA_PATH:-/mnt/sstv-sigmon/mysql}"
+df -h "${DB_DATA_PATH:-/mnt/sstv-sigmon/mysql}"
+```
+
+Causas comuns:
+
+- diretório de dados sem `chown -R 999:999` (uid do MySQL no container) ou sem espaço;
+- `.env` editado **depois** da primeira inicialização — `MYSQL_USER`/`MYSQL_PASSWORD` só são criados quando o diretório está vazio;
+- import do `cftv_gml.sql` falhou (veja `ERROR 1418` acima): o healthcheck espera `SELECT 1 FROM usuarios`, então o banco nunca fica healthy se a tabela não existe.
+
+Se for instalação nova e o diretório não contém dados a preservar:
+
+```bash
+docker compose -f docker-compose.prod.yml down
+sudo rm -rf /mnt/sstv-sigmon/mysql/*
+sudo chown -R 999:999 /mnt/sstv-sigmon/mysql
+sudo chmod 750 /mnt/sstv-sigmon/mysql
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+> ⛔ O `rm -rf` acima apaga todo o banco. Em servidor com dados, faça backup
+> (`scripts/backup.sh`) e corrija apenas permissões/credenciais.
 
 ## Atualização manual (servidor)
 
