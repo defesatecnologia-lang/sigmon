@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="/public/images/Logo_sigmon.png" alt="Logo" width="300">
+  <img src="/public/images/logo_sigmon.png" alt="Logo" width="300">
 
   <h1>SIGMON — Sistema Integrado de Gestão e Monitoramento</h1>
 
