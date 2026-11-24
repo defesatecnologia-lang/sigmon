@@ -45,8 +45,9 @@
 - [ ] 3.2 Garantir que `.env` de produção NÃO esteja no repositório (`.gitignore` já bloqueia — confirmar).
 - [ ] 3.3 Confirmar que `docker-compose.prod.yml` falha com `DB_ROOT_PASSWORD required`/
       `DB_PASS required` quando ausentes.
-- [ ] 3.4 (Opcional P2) Configurar TLS/terminação HTTPS — hoje o compose prod só expõe porta 80;
-      HSTS já está preparado mas exige HTTPS real.
+- [x] 3.4 TLS/HTTPS **aceito para intranet** — o compose prod publica 80 → 301 → 443
+      com certificado self-signed automático; decisão em `docs/ADR_SEGURANCA.md`.
+      Para exposição pública, substituir por CA confiável.
 - [ ] 3.5 Definir `APP_ALLOWED_ORIGINS` explícito (não deixar vazio `*` implícito).
 
 ## Fase 4 — Reproduzir suíte de testes e análise estática (P0)
@@ -84,3 +85,8 @@ O sistema estará liberado quando:
 4. A suíte `phpunit`/`phpstan`/audit for reproduzida e não houver falhas bloqueantes (Fase 4).
 5. Os pontos de segurança em aberto (F-102, F-103, F-104) estiverem fechados ou formalmente aceitos (Fase 5).
 6. (Recomendado) HTTPS em produção configurado antes de expor ao público.
+
+**Atualização 2026-11-20 (intranet):** itens 1–5 concluídos e revalidados; item 6
+aceito para intranet com o TLS self-signed do container (ver `ADR_SEGURANCA.md`).
+Correções adicionais: C-7 (race no boot do MySQL) e C-8 (contagem de migrations),
+detalhadas em `PROD_READINESS_REPORT.md`, seção 10.

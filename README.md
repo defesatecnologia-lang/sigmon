@@ -260,7 +260,7 @@ sigmon/
 ├── storage/                     # Dados runtime
 │   ├── cep_cache/              # Cache de consultas CEP
 │   └── ratelimit/              # Dados de rate limiting
-├── tests/                       # Testes PHPUnit (176 testes)
+├── tests/                       # Testes (197 PHP + 104 JS)
 │   ├── Unit/                   # Testes unitários
 │   ├── Integration/            # Testes de integração
 │   ├── Api/                    # Testes de API (requer servidor http)
@@ -396,6 +396,24 @@ A hierarquia é cumulativa: `admin > supervisor > user`. Usuários com nível su
 6. Manter `.env` fora do repositório
 7. Backups diários do banco (`scripts/backup.sh` ou `scripts/backup.ps1`)
 
+### Prontidão para intranet (2026-11-20)
+
+O stack de produção foi revalidado de ponta a ponta para uso em **rede interna**:
+
+- build Nginx/FPM + MySQL 8.4 com volume novo sobe sem 500 (race do boot corrigida);
+- `80 → 301 → 443`, `/` e `api_ping` 200, `api_health` 401, `.env`/`config/` 403;
+- login com senha temporária obrigatória e `api_dashboard` autenticado 200;
+- `php database/migrate.php --status` → `Pending: 0` (contagem de migrations corrigida);
+- PHPUnit 197/197, Vitest 104/104, PHPStan 0 erros, `composer audit`/`npm audit` limpos.
+
+O TLS self-signed gerado pelo container é **aceito para intranet**. Para exposição
+pública, substituir por CA confiável. Decisões em `docs/ADR_SEGURANCA.md`; detalhes
+em `docs/PROD_READINESS_REPORT.md` (seção 10).
+
+No servidor: `cp .env.prod.example .env`, trocar `DB_ROOT_PASSWORD`/`DB_PASS`, manter
+`APP_ALLOWED_ORIGINS` vazio (mesma origem), instalar a CA interna nos clientes e
+configurar `SENTRY_DSN`, backup e alertas de recursos.
+
 ## Testes
 
 ```bash
@@ -412,7 +430,8 @@ vendor/bin/phpunit tests/Api/
 vendor/bin/phpstan analyse
 ```
 
-**176+ testes, 0 erros PHPStan, 0 falhas.**
+**197 testes PHP (355 assertions) + 104 testes JS, 0 erros PHPStan, 0 falhas.**
+(38 skips ambientais e 60 notices de depreciação não bloqueiam a suíte.)
 
 > Nota: skips ambientais ocorrem quando o servidor HTTP de teste não está no ar (tests/Api) ou o MySQL de teste não está disponível (tests/Integration) — não são regressões.
 
@@ -470,6 +489,7 @@ php database/migrate.php
 # 2. Verificar status final
 php database/migrate.php --status
 # Deve mostrar: Total: N | Applied: N | Pending: 0
+# As migrations legadas .sql aparecem em nota separada, fora do Total.
 ```
 
 ## Performance
@@ -537,14 +557,14 @@ npm install && npm run build
 - **Banco**: MySQL 8.0+ / MariaDB 10.5+
 - **Ícones**: Font Awesome 6 (self-host via npm `@fortawesome/fontawesome-free`)
 - **Mapa**: Leaflet
-- **Testes**: PHPUnit 10, Vitest
+- **Testes**: PHPUnit 13, Vitest 4
 - **Análise**: PHPStan (nível 5), PHP_CodeSniffer, roave/security-advisories
 - **Build**: Vite, compression plugin, PurgeCSS
 
 ---
 
 **Versão**: 1.0.0
-**Última atualização**: 2026-07-12 (Performance Tier 1+2+3 aplicados)
+**Última atualização**: 2026-11-20 (prontidão para intranet, C-7/C-8 e documentação alinhada)
 
 Passos para nova implantação:
 1. `mysql -u root -p < config/DB/cftv_gml.sql` — importa schema completo (com todos os objetos: índices, triggers, procedures, eventos, partições e tabela `migrations` já populada)

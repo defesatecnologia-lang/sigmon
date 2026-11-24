@@ -32,18 +32,30 @@ updates:
       day: "monday"
       time: "06:00"
       timezone: "America/Sao_Paulo"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "javascript"
     commit-message:
       prefix: "chore(deps):"
       include: "scope"
+    # Majors de tooling exigem janela dedicada (ver docs/DEPENDENCIES_REPORT.md).
+    # Ignorar também @vitest/* evita o conflito de peer entre vitest e coverage-v8.
+    ignore:
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitest/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@fullhuman/postcss-purgecss"
+        update-types: ["version-update:semver-major"]
     groups:
       dev-tools:
         patterns:
           - "vite*"
           - "@vitejs/*"
+          - "@vitest/*"
           - "eslint*"
           - "prettier*"
           - "typescript*"

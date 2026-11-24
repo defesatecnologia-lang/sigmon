@@ -39,30 +39,52 @@ class database implements \App\Database\DatabaseInterface
 
     private function connect(): void
     {
-        try {
-            $port = getenv('DB_PORT') ?: '3306';
-            $dsn = 'mysql:host=' . DB_HOST . ';port=' . $port . ';dbname=' . DB_NAME . ';charset=utf8mb4';
-            $options = [
-                \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
-                \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_OBJ,
-                \PDO::ATTR_EMULATE_PREPARES => false,
-                \PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true,
-                \PDO::ATTR_TIMEOUT => 5,
-                \PDO::ATTR_PERSISTENT => false,
-            ];
+        // Em producao o MySQL pode reiniciar (ou ainda estar inicializando o schema).
+        // Tentativas curtas evitam 500 transitorios; o default (1) mantem tests rapidos.
+        $maxAttempts = max(1, min(30, (int)(getenv('DB_CONNECT_MAX_ATTEMPTS') ?: 1)));
+        $delayMs = max(0, min(5000, (int)(getenv('DB_CONNECT_RETRY_DELAY_MS') ?: 500)));
+        $lastError = null;
 
-            $sslCa = getenv('DB_SSL_CA');
-            if ($sslCa !== false && $sslCa !== '') {
-                $options[\PDO::MYSQL_ATTR_SSL_CA] = $sslCa;
-                $options[\PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = true;
-            }
+        $port = getenv('DB_PORT') ?: '3306';
+        $dsn = 'mysql:host=' . DB_HOST . ';port=' . $port . ';dbname=' . DB_NAME . ';charset=utf8mb4';
+        $options = [
+            \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+            \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_OBJ,
+            \PDO::ATTR_EMULATE_PREPARES => false,
+            \PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true,
+            \PDO::ATTR_TIMEOUT => 5,
+            \PDO::ATTR_PERSISTENT => false,
+        ];
 
-            $this->pdo = new \PDO($dsn, DB_USER, DB_PASS, $options);
-            $this->reconnectAttempts = 0;
-        } catch (\PDOException $err) {
-            logError('Erro de conexao', ['error' => $err->getMessage()], 'database');
-            throw new \RuntimeException('Erro de conexao com o banco de dados.');
+        $sslCa = getenv('DB_SSL_CA');
+        if ($sslCa !== false && $sslCa !== '') {
+            $options[\PDO::MYSQL_ATTR_SSL_CA] = $sslCa;
+            $options[\PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = true;
         }
+
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            try {
+                $this->pdo = new \PDO($dsn, DB_USER, DB_PASS, $options);
+                $this->reconnectAttempts = 0;
+                return;
+            } catch (\PDOException $err) {
+                $lastError = $err;
+                if ($attempt < $maxAttempts) {
+                    logWarning('Conexao com o banco falhou; retentando', [
+                        'attempt' => $attempt,
+                        'max' => $maxAttempts,
+                        'error' => $err->getMessage(),
+                    ], 'database');
+                    usleep($delayMs * 1000);
+                }
+            }
+        }
+
+        logError('Erro de conexao', [
+            'error' => $lastError instanceof \PDOException ? $lastError->getMessage() : 'erro desconhecido',
+            'attempts' => $maxAttempts,
+        ], 'database');
+        throw new \RuntimeException('Erro de conexao com o banco de dados.');
     }
 
     private function ensureConnection(): void

@@ -3,6 +3,8 @@
 Auditoria de Testes — Projeto "Controle Share Videos" v1.0.
 Data: 2026-08-16. Método: revisão estática dos testes (PHPUnit, Vitest, smoke scripts), execução das suítes, análise de cobertura/mocks/fixtures/casos extremos. Referência: protocolo Fase 11.
 
+> **Atualização 2026-11-20:** os números abaixo são históricos. Na revisão atual as suítes passaram com **197 testes PHP** (0 falhas, 38 skips ambientais) e **104 testes JS** (104/104), PHPStan 0 erros e audits limpos. Os achados F-704/F-705/F-706 seguem como melhorias não bloqueantes.
+
 ## Resumo Executivo
 
 A suíte é **sólida em quantidade e em qualidade na camada unitária**: 10 testes PHP Unit, 12 suítes JS (88 testes), mocks de `database` bem usados, RateLimiter testado com filesystem real isolado, SecurityTest com bons casos negativos. Tudo passa (172 testes PHP com 14 falhas **ambientais** e 18 skips; 88/88 JS).
