@@ -91,6 +91,16 @@
       ]
     },
 
+    "memory": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
+    },
+
     "playwright": {
       "type": "local",
       "enabled": true,

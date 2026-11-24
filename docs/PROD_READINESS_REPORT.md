@@ -270,7 +270,7 @@ Esses itens **não estavam documentados** antes e bloqueavam o go-live:
 | **C-1** | 🔴 Crítico | `npm run build` falhava no `Dockerfile.nginx` (prod): `Set.prototype.difference is not a function` — Node 20 incompatível com `postcss-merge-longhand@8` (engine `^22.11 \|\| ^24.11`) | Build stages movidos para `node:24-slim` + `engines` no `package.json` |
 | **C-2** | 🔴 Crítico | `read_only: true` + tmpfs insuficientes: Nginx não conseguia criar `/var/lib/nginx/{body,proxy,fastcgi,scgi,uwsgi}`, `/var/log/nginx`, `/var/run/nginx.pid` | `tmpfs` cobrindo `/var/lib/nginx`, `/var/cache/nginx`, `/var/log/nginx`, `/run` com `uid=33,gid=33` |
 | **C-3** | 🔴 Crítico | Porta publicada fixa `"80:8080"` impedia staging em paralelo | Parametrizado `${APP_PORT:-80}:8080` |
-| **C-4** | 🟠 Alta | `config/DB/cftv_gml.sql:87-92` embute 3 usuários default (`admin`/`supervisor`/`usuario`) todos com senha `admin@123` conhecida — banco prod recém-importado nasce com credenciais públicas | ✅ **Resolvido (Fase 3)**: seed agora marca `senha_temporaria=1`, forçando troca no 1º login |
+| **C-4** | 🟠 Alta | `config/DB/cftv_gml.sql:87-92` embutia 3 usuários default (`admin`/`supervisor`/`usuario`) todos com senha `admin@123` conhecida — banco prod recém-importado nasce com credenciais públicas | ✅ **Resolvido (Fase 3+)**: seed mantém apenas `admin` com `senha_temporaria=1`, forçando troca no 1º login |
 
 ### Configurações alteradas nesta fase
 
