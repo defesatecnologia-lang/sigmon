@@ -305,7 +305,15 @@ jobs:
           # criação de PR por Actions estiver habilitada nas configurações do repo.
           GH_TOKEN: ${{ secrets.PULL_REQUEST_TOKEN || github.token }}
         run: |
-          if gh pr view fix/dev-development --repo "${{ github.repository }}" --base main >/dev/null 2>&1; then
+          PR_COUNT="$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --head fix/dev-development \
+            --base main \
+            --state open \
+            --json number \
+            --jq 'length')"
+
+          if [[ "${PR_COUNT}" -gt 0 ]]; then
             echo "PR fix/dev-development -> main já existe."
             exit 0
           fi
