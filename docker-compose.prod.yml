@@ -15,6 +15,9 @@ name: sigmon
 
 services:
   db:
+    # MySQL 8.4 LTS (tag flutuante -> ultimo patch, atualmente 8.4.x).
+    # Nao existe tag oficial "mysql:8.5"; "mysql:lts" hoje aponta para 9.7
+    # (major diferente) e nao deve ser usado sem migracao testada.
     image: mysql:8.4
     restart: unless-stopped
     # log-bin-trust-function-creators=1: necessario para criar a funcao
@@ -28,19 +31,23 @@ services:
       MYSQL_PASSWORD: ${DB_PASS:?DB_PASS required}
     # DB acessivel apenas na rede interna (backend), nao publicado no host
     volumes:
-      # Dados do MySQL em disco externo (Ubuntu Server: /mnt/sstv-dados).
+      # Dados do MySQL em particao dedicada (RAID6 montada em /mnt/sstv-sigmon).
       # Ajuste DB_DATA_PATH no .env se o ponto de montagem for diferente.
-      - ${DB_DATA_PATH:-/mnt/sstv-dados/mysql}:/var/lib/mysql
+      - ${DB_DATA_PATH:-/mnt/sstv-sigmon/mysql}:/var/lib/mysql
       - ./config/DB/cftv_gml.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     # Healthcheck por TCP + tabela real: o mysqladmin -h localhost usa socket e
     # ficava "healthy" durante o servidor temporario de init (porta 0), fazendo
     # o app subir cedo e responder 500 ate o MySQL final iniciar (C-7).
     healthcheck:
       test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysql -h 127.0.0.1 -u \"$$MYSQL_USER\" -D \"$$MYSQL_DATABASE\" -e 'SELECT 1 FROM usuarios LIMIT 1' >/dev/null 2>&1"]
-      interval: 5s
-      timeout: 5s
+      # Em RAID6 a primeira inicializacao (initialize + import do schema) levou
+      # ~5min. O healthcheck antigo (30s + 30x5s = 180s) marcava o db como
+      # unhealthy antes do mysqld abrir a porta 3306, derrubando o app por
+      # depends_on: service_healthy. Falhas durante start_period nao contam.
+      interval: 10s
+      timeout: 10s
       retries: 30
-      start_period: 30s
+      start_period: 360s
     networks:
       - backend
     # Hardening: nao-root (mysql UID 999), capabilities minimas, read-only onde possivel
@@ -74,6 +81,8 @@ services:
       - "${APP_HTTPS_PORT:-443}:8443"
     environment:
       SIGMON_ENV: production
+      # Usado pelo entrypoint do Nginx no redirect HTTP -> HTTPS (porta publica).
+      APP_HTTPS_PORT: ${APP_HTTPS_PORT:-443}
       DB_HOST: db
       DB_PORT: 3306
       DB_NAME: ${DB_NAME:-cftv_gml}

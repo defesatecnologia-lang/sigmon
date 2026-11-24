@@ -33,11 +33,25 @@ fi
 
 # O nginx monta $https automaticamente ("on" em conexoes TLS);
 # portanto cookie Secure + HSTS da aplicacao funcionam no HTTPS.
+#
+# O redirect HTTP -> HTTPS precisa preservar a porta publica do HTTPS no host.
+# Sem isso, um acesso em http://ip:8001 cairia em https://ip/ (443), onde pode
+# estar outro sistema. APP_HTTPS_PORT e injetado pelo docker-compose.prod.yml.
+PUBLIC_HTTPS_PORT="${APP_HTTPS_PORT:-443}"
+case "$PUBLIC_HTTPS_PORT" in
+    ''|443) HTTPS_AUTHORITY="\$host" ;;
+    *[!0-9]*)
+        echo "[entrypoint] APP_HTTPS_PORT invalido: $PUBLIC_HTTPS_PORT" >&2
+        exit 1
+        ;;
+    *) HTTPS_AUTHORITY="\$host:${PUBLIC_HTTPS_PORT}" ;;
+esac
+
 cat > "$CONF_DIR/server.conf" <<EOF
 server {
     listen 8080 default_server;
     server_name _;
-    return 301 https://\$host\$request_uri;
+    return 301 https://${HTTPS_AUTHORITY}\$request_uri;
 }
 
 server {

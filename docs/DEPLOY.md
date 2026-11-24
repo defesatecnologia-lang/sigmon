@@ -28,6 +28,29 @@ docker compose -f docker-compose.prod.yml restart app
 - Os clientes devem confiar na CA interna (ou aceitar o self-signed).
 - Cookies de sessão são `Secure` (o Nginx detecta `$https` automaticamente).
 
+## Portas customizadas (ex.: acesso em `https://ip:8000`)
+
+Quando o servidor hospeda vários sistemas, ajuste apenas o `.env` — não é preciso editar o compose:
+
+```env
+APP_PORT=8001        # HTTP (apenas redirect) -> container 8080
+APP_HTTPS_PORT=8000  # HTTPS (aplicação) -> container 8443
+```
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+curl -k https://localhost:8000/
+```
+
+O redirect `HTTP -> HTTPS` gerado pelo entrypoint usa `APP_HTTPS_PORT`, então
+`http://ip:8001` vai para `https://ip:8000/` (e não para `https://ip/` na porta
+443, onde pode estar outro sistema). Se `APP_HTTPS_PORT=443`, o redirect fica
+sem porta, como no padrão.
+
+> **MySQL:** use `mysql:8.4` (LTS). Não existe tag oficial `mysql:8.5`; a tag
+> `mysql:lts` atualmente aponta para `9.7` (major diferente) e só deve ser
+> adotada após migração e testes.
+
 ## Pré-requisitos no servidor (Ubuntu Server)
 
 ```bash
@@ -35,11 +58,11 @@ docker compose -f docker-compose.prod.yml restart app
 sudo mkdir -p /opt/sigmon
 sudo chown $USER:$USER /opt/sigmon
 
-# Disco externo para dados do MySQL (ajuste o ponto de montagem conforme o servidor)
+# Particao dedicada para dados do MySQL (RAID6 montada em /mnt/sstv-sigmon).
 # O container do MySQL roda como uid/gid 999.
-sudo mkdir -p /mnt/sstv-dados/mysql
-sudo chown -R 999:999 /mnt/sstv-dados/mysql
-sudo chmod 750 /mnt/sstv-dados/mysql
+sudo mkdir -p /mnt/sstv-sigmon/mysql
+sudo chown -R 999:999 /mnt/sstv-sigmon/mysql
+sudo chmod 750 /mnt/sstv-sigmon/mysql
 
 # Estrutura esperada em /opt/sigmon
 /opt/sigmon/
@@ -50,7 +73,7 @@ sudo chmod 750 /mnt/sstv-dados/mysql
         └── cftv_gml.sql       # schema inicial (cópia do repo)
 ```
 
-> **Dados do banco:** `docker-compose.prod.yml` monta `${DB_DATA_PATH:-/mnt/sstv-dados/mysql}` em `/var/lib/mysql` (não usa volume nomeado). Garanta que `/mnt/sstv-dados` esteja montado (ex.: entrada em `/etc/fstab`) antes de subir os containers. O `01-schema.sql` em `docker-entrypoint-initdb.d` só é executado quando o diretório de dados está vazio (primeira inicialização).
+> **Dados do banco:** `docker-compose.prod.yml` monta `${DB_DATA_PATH:-/mnt/sstv-sigmon/mysql}` em `/var/lib/mysql` (não usa volume nomeado). Garanta que `/mnt/sstv-sigmon` esteja montado (ex.: entrada em `/etc/fstab`) antes de subir os containers. O `01-schema.sql` em `docker-entrypoint-initdb.d` só é executado quando o diretório de dados está vazio (primeira inicialização).
 
 ## Arquivo `.env`
 
@@ -62,8 +85,8 @@ DB_PASS=senha_usuario_forte
 DB_NAME=cftv_gml
 DB_USER=cftv_user
 
-# Caminho dos dados do MySQL no host (disco externo)
-DB_DATA_PATH=/mnt/sstv-dados/mysql
+# Caminho dos dados do MySQL no host (particao dedicada RAID6)
+DB_DATA_PATH=/mnt/sstv-sigmon/mysql
 
 # Acesso HTTPS/HTTP no host (defaults: 443 / 80)
 APP_PORT=80
@@ -118,6 +141,43 @@ docker compose -f docker-compose.prod.yml ps   # db + app healthy
 curl -k https://localhost/                     # 200 (front controller)
 curl -I http://localhost/                      # 301 -> https
 ```
+
+### `sigmon-db-1` unhealthy na primeira subida
+
+Se o `db` fica `unhealthy` e o `app` não inicia (`condition: service_healthy`),
+colete antes de mudar qualquer coisa:
+
+```bash
+docker compose -f docker-compose.prod.yml logs --tail=200 db
+docker inspect --format '{{json .State.Health}}' sigmon-db-1 | jq -r '.Log[-1].Output'
+ls -ld "${DB_DATA_PATH:-/mnt/sstv-sigmon/mysql}"
+df -h "${DB_DATA_PATH:-/mnt/sstv-sigmon/mysql}"
+```
+
+Causas comuns:
+
+- **inicialização lenta em RAID6**: `initialize` + import do schema levou ~5 min e o healthcheck antigo (180s) marcava o `db` como `unhealthy` antes do MySQL abrir a porta 3306. O compose agora usa `start_period: 360s` — basta atualizar o compose e subir de novo;
+- diretório de dados sem `chown -R 999:999` (uid do MySQL no container) ou sem espaço;
+- `.env` editado **depois** da primeira inicialização — `MYSQL_USER`/`MYSQL_PASSWORD` só são criados quando o diretório está vazio;
+- import do `cftv_gml.sql` falhou (veja `ERROR 1418` acima): o healthcheck espera `SELECT 1 FROM usuarios`, então o banco nunca fica healthy se a tabela não existe.
+
+> Os `[ERROR] Event Scheduler ... Query execution was interrupted` no log durante
+> o `Stopping temporary server` são esperados: os eventos do schema estavam
+> ativos enquanto o entrypoint encerrava o servidor temporário. Não indicam
+> falha na importação.
+
+Se for instalação nova e o diretório não contém dados a preservar:
+
+```bash
+docker compose -f docker-compose.prod.yml down
+sudo rm -rf /mnt/sstv-sigmon/mysql/*
+sudo chown -R 999:999 /mnt/sstv-sigmon/mysql
+sudo chmod 750 /mnt/sstv-sigmon/mysql
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+> ⛔ O `rm -rf` acima apaga todo o banco. Em servidor com dados, faça backup
+> (`scripts/backup.sh`) e corrija apenas permissões/credenciais.
 
 ## Atualização manual (servidor)
 
