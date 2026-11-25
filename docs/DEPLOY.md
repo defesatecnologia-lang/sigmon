@@ -210,13 +210,12 @@ Se der `404`, a imagem em execução é antiga: rode `up -d --build` novamente.
 
 ### Tag automática (rodapé)
 
-A versão exibida no rodapé vem da variável `APP_RELEASE_TAG` embutida na imagem pelo CD. O arquivo `VERSION` é a fonte da versão e a tag correspondente é criada automaticamente quando `main` é atualizada.
+A versão exibida no rodapé vem da variável `APP_RELEASE_TAG` embutida na imagem pelo CD. O arquivo `VERSION` é a fonte da versão e a tag correspondente é criada automaticamente quando `main` é atualizada. A configuração do servidor não sobrescreve essa versão, para que o rodapé identifique o release realmente implantado.
 
 Para atualizações pelo servidor, configure `.env` assim:
 
 ```env
 APP_TAG=latest
-APP_VERSION=
 ```
 
 Depois disso, execute o script no servidor para atualizar o sistema.

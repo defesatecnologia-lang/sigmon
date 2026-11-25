@@ -89,9 +89,7 @@ services:
       DB_USER: ${DB_USER:-cftv_user}
       DB_PASS: ${DB_PASS:?DB_PASS required}
       APP_TIMEZONE: America/Sao_Paulo
-      # Override opcional da versao exibida no rodape. Quando vazio, o PHP usa
-      # APP_RELEASE_TAG, embutida na imagem pelo pipeline da tag v*.
-      APP_VERSION: ${APP_VERSION:-}
+      # A versao do rodape vem de APP_RELEASE_TAG, embutida na imagem do release.
       SIGMON_SESSION_TIMEOUT: 3600
       SIGMON_SESSION_ABSOLUTE_TIMEOUT: 28800
       SIGMON_CSP_ALLOW_INLINE_STYLES: 0

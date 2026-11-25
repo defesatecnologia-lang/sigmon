@@ -24,8 +24,8 @@ unset($_SESSION['error']);
     min-height: 0;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    gap: 24px;
+    justify-content: center;
+    gap: 20mm;
 }
 
 .page-login footer.footer {
@@ -63,7 +63,7 @@ unset($_SESSION['error']);
     min-height: 0;
     height: auto;
     object-fit: contain;
-    margin: 0 auto 42mm;
+    margin: 0 auto;
 }
 
 .page-login .login-input {
