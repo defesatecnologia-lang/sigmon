@@ -154,7 +154,7 @@ function requireApiCsrf(bool $rotate = true): void
                 'message' => 'Token CSRF invalido ou ausente.',
                 'data' => [],
                 'meta' => [
-                    'timestamp' => date('Y-m-d\TH:i:s\Z'),
+                    'timestamp' => gmdate('Y-m-d\TH:i:s\Z'),
                     'request_id' => \App\Api\ApiResponse::getRequestId()
                 ]
             ], JSON_UNESCAPED_UNICODE);
@@ -185,7 +185,7 @@ function requireApiCsrf(bool $rotate = true): void
             'message' => 'Token CSRF invalido ou ausente.',
             'data' => [],
             'meta' => [
-                'timestamp' => date('Y-m-d\TH:i:s\Z'),
+                'timestamp' => gmdate('Y-m-d\TH:i:s\Z'),
                 'request_id' => \App\Api\ApiResponse::getRequestId()
             ]
         ], JSON_UNESCAPED_UNICODE);

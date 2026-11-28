@@ -136,6 +136,13 @@ SIGMON_CSP_ALLOW_INLINE_STYLES=0        # mantenha 0 (CSP estrita)
 ### "Configurações ausentes: DB_PASS"
 O `.env` existe mas não contém a variável `DB_PASS`. Adicione a linha.
 
+### Horários gravados no banco 3 horas à frente
+`created_at`/`updated_at` são gerados pelo MySQL (`CURRENT_TIMESTAMP`/`NOW()`).
+A aplicação alinha o fuso da sessão do MySQL ao `APP_TIMEZONE` na conexão, e os
+composes definem `TZ` para o container do banco. Se usar MySQL externo, garanta
+que o servidor esteja em `America/Sao_Paulo` ou que `APP_TIMEZONE` esteja correto
+no `.env`. Para conferir: `SELECT @@global.time_zone, @@session.time_zone, NOW(), UTC_TIMESTAMP();`.
+
 ### "composer: command not found"
 ```bash
 sudo apt install composer -y

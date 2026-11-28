@@ -65,6 +65,7 @@ class database implements \App\Database\DatabaseInterface
         for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
             try {
                 $this->pdo = new \PDO($dsn, DB_USER, DB_PASS, $options);
+                $this->applyDatabaseTimezone();
                 $this->reconnectAttempts = 0;
                 return;
             } catch (\PDOException $err) {
@@ -113,6 +114,47 @@ class database implements \App\Database\DatabaseInterface
     public function getConnection(): \PDO
     {
         return $this->pdo;
+    }
+
+    /**
+     * Alinha o fuso da sessao MySQL ao fuso configurado na aplicacao (APP_TIMEZONE).
+     *
+     * created_at/updated_at usam CURRENT_TIMESTAMP/NOW(), avaliados pelo MySQL.
+     * Sem isso, o banco (UTC por padrao no container oficial) grava horarios 3h
+     * a frente do PHP em America/Sao_Paulo.
+     */
+    private function applyDatabaseTimezone(): void
+    {
+        $timezone = date_default_timezone_get();
+
+        // Nomeado respeita DST quando as tabelas de fuso do MySQL estao carregadas.
+        try {
+            if (preg_match('/^[A-Za-z0-9_\/+:-]+$/', $timezone)) {
+                $this->pdo->exec("SET time_zone = '" . $timezone . "'");
+                return;
+            }
+        } catch (\PDOException $err) {
+            // Fallback: offset numerico nao depende das tabelas de fuso do MySQL.
+        }
+
+        try {
+            $tz = new \DateTimeZone($timezone);
+            $offset = $tz->getOffset(new \DateTime('now', $tz));
+            $seconds = abs($offset);
+            $signal = $offset < 0 ? '-' : '+';
+            $mysqlOffset = sprintf(
+                '%s%02d:%02d',
+                $signal,
+                intdiv($seconds, 3600),
+                intdiv($seconds % 3600, 60)
+            );
+            $this->pdo->exec("SET time_zone = '" . $mysqlOffset . "'");
+        } catch (\Exception $err) {
+            logWarning('Nao foi possivel definir o fuso da sessao MySQL', [
+                'timezone' => $timezone,
+                'error' => $err->getMessage(),
+            ], 'database');
+        }
     }
 
     public function setUserContext(?int $userId, ?string $origem = 'web'): void
