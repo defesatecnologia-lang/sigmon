@@ -149,7 +149,8 @@ class HomeDashboard extends (window.DashboardCore as any) {
         }
 
         const rows = manutencoes.map((m: Record<string, unknown>) => {
-            const data = m.data_hora ? new Date((m.data_hora as string) + ' UTC').toLocaleString('pt-BR') : '-';
+            // Banco grava datetime local (APP_TIMEZONE), sem sufixo UTC.
+            const data = m.data_hora ? new Date(String(m.data_hora).replace(' ', 'T')).toLocaleString('pt-BR') : '-';
             const nome = (m.camera_nome as string) || 'ID ' + (m.equipamento_id || '-');
             const desc = m.descricao ? ((m.descricao as string).length > 100 ? (m.descricao as string).substring(0, 100) + '...' : m.descricao as string) : '-';
             return `<tr>
