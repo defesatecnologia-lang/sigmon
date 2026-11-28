@@ -45,4 +45,14 @@ else
     exit 1
 fi
 
+# 5. Manifest PWA (nao pode cair no bloqueio generico de arquivos .json)
+manifest_url="${BASE_URL}/manifest.json"
+code=$(curl -s -o /dev/null -w "%{http_code}" -m 10 "$manifest_url")
+if [ "$code" = "200" ]; then
+    echo "OK: manifest.json da PWA acessivel (200)"
+else
+    echo "FAIL: manifest.json (esperado=200, atual=$code)"
+    exit 1
+fi
+
 echo "=== Smoke Básico concluido ==="

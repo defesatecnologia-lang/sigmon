@@ -105,8 +105,8 @@ SetEnvIfNoCase Request_URI "\.gz$" no-gzip dont-vary
     </IfModule>
 </IfModule>
 
-# Bloquear acesso a arquivos-sensiveis (exceto sw-assets.json para PWA)
-<If "! %{REQUEST_URI} =~ m#sw-assets\.json$#">
+# Bloquear acesso a arquivos-sensiveis (exceto JSON publicos da PWA)
+<If "! %{REQUEST_URI} =~ m#(sw-assets|manifest)\.json$#">
     <FilesMatch "\.(env|sql|md|log|yml|yaml|json|lock)$">
         Require all denied
     </FilesMatch>
