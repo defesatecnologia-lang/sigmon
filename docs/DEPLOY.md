@@ -208,6 +208,19 @@ curl -k -o /dev/null -w '%{http_code}\n' https://localhost:8000/assets/webfonts/
 
 Se der `404`, a imagem em execução é antiga: rode `up -d --build` novamente.
 
+### PWA: `manifest.json` com 403
+
+O bloqueio genérico de arquivos `.json` no Nginx (`docker/locations.conf`) e no
+Apache (`public/.htaccess`) possui exceção apenas para os JSON públicos da PWA:
+`sw-assets.json` e `manifest.json`. Se o console mostrar
+`Manifest fetch ... code 403`, a imagem em execução ainda usa a regra antiga:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+curl -k -o /dev/null -w '%{http_code}\n' https://localhost:8000/manifest.json
+# esperado: 200
+```
+
 ### Tag automática (rodapé)
 
 A versão exibida no rodapé vem da variável `APP_RELEASE_TAG` embutida na imagem pelo CD. O arquivo `VERSION` é a fonte da versão e a tag correspondente é criada automaticamente quando `main` é atualizada. A configuração do servidor não sobrescreve essa versão, para que o rodapé identifique o release realmente implantado.
