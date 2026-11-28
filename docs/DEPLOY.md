@@ -40,6 +40,30 @@ docker compose -f docker-compose.prod.yml restart app
 - Os clientes devem confiar na CA interna (ou aceitar o self-signed).
 - Cookies de sessão são `Secure` (o Nginx detecta `$https` automaticamente).
 
+### `SIGMON_HTTP_ONLY`
+
+O entrypoint respeita `SIGMON_HTTP_ONLY` (passado pelo compose a partir do `.env`):
+
+| Valor | Comportamento | Acesso |
+|-------|---------------|--------|
+| `0` (padrão do compose) | HTTPS na 8443; 8080 redireciona 301 | `https://ip:${APP_HTTPS_PORT}` |
+| `1` | HTTP-only na 8080, sem TLS nem redirect | `http://ip:${APP_PORT}` |
+
+Se o container subir com `SIGMON_HTTP_ONLY=1`, nada escuta na 8443 — o mapeamento
+`${APP_HTTPS_PORT}:8443` não responde e o navegador mostra `ERR_CONNECTION_RESET`
+ou `Broken pipe`. Confira com:
+
+```bash
+docker compose -f docker-compose.prod.yml logs --tail=20 app
+# não deve aparecer: "Modo HTTP_ONLY ativo"
+docker compose -f docker-compose.prod.yml exec app \
+  sh -c 'cat /run/nginx_conf/server.conf'
+```
+
+Para voltar ao modo TLS, defina `SIGMON_HTTP_ONLY=0` no `.env`, recrie o
+container (`docker compose -f docker-compose.prod.yml up -d --no-build app`) e
+libere no firewall apenas as portas realmente usadas (`APP_PORT`/`APP_HTTPS_PORT`).
+
 ## Portas customizadas (ex.: acesso em `https://ip:8000`)
 
 Quando o servidor hospeda vários sistemas, ajuste apenas o `.env` — não é preciso editar o compose:

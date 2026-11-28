@@ -81,6 +81,9 @@ services:
       - "${APP_HTTPS_PORT:-443}:8443"
     environment:
       SIGMON_ENV: production
+      # 0 = HTTPS na 8443 (redirect de 8080); 1 = HTTP-only na 8080.
+      # Defina 0 para acessar por https://host:${APP_HTTPS_PORT}.
+      SIGMON_HTTP_ONLY: ${SIGMON_HTTP_ONLY:-0}
       # Usado pelo entrypoint do Nginx no redirect HTTP -> HTTPS (porta publica).
       APP_HTTPS_PORT: ${APP_HTTPS_PORT:-443}
       DB_HOST: db
