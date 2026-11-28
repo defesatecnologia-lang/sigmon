@@ -7,6 +7,9 @@
 3. Para cada nova release, incremente `VERSION` (formato `vX.Y.Z`) antes de mesclar as mudanças em `main`.
 
 > O CD publica a imagem, mas não conecta ao servidor. O deploy é executado localmente no servidor pelo script abaixo.
+>
+> **Regra de produção:** nunca atualizar com `up -d --build` direto no servidor.
+> Sempre aguardar a publicação do release pelo CD e executar `scripts/server/deploy.sh`.
 
 Se o job de publicação do GHCR falhar com `permission_denied` ou `write_package`,
 configure o secret `GHCR_TOKEN` nas configurações do repositório. Use um Personal
@@ -47,7 +50,7 @@ APP_HTTPS_PORT=8000  # HTTPS (aplicação) -> container 8443
 ```
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml up -d
 curl -k https://localhost:8000/
 ```
 
@@ -185,7 +188,7 @@ docker compose -f docker-compose.prod.yml down
 sudo rm -rf /mnt/sstv-sigmon/mysql/*
 sudo chown -R 999:999 /mnt/sstv-sigmon/mysql
 sudo chmod 750 /mnt/sstv-sigmon/mysql
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 > ⛔ O `rm -rf` acima apaga todo o banco. Em servidor com dados, faça backup
@@ -206,17 +209,20 @@ curl -k -o /dev/null -w '%{http_code}\n' https://localhost:8000/assets/webfonts/
 # esperado: 200
 ```
 
-Se der `404`, a imagem em execução é antiga: rode `up -d --build` novamente.
+Se der `404`, a imagem em execução é antiga: aguarde um novo release e rode
+`./scripts/server/deploy.sh latest`.
 
 ### PWA: `manifest.json` com 403
 
 O bloqueio genérico de arquivos `.json` no Nginx (`docker/locations.conf`) e no
 Apache (`public/.htaccess`) possui exceção apenas para os JSON públicos da PWA:
 `sw-assets.json` e `manifest.json`. Se o console mostrar
-`Manifest fetch ... code 403`, a imagem em execução ainda usa a regra antiga:
+`Manifest fetch ... code 403`, a imagem em execução ainda usa a regra antiga.
+Aguarde o CD publicar um release com a correção e rode o deploy pelo script
+(nunca `up -d --build` em produção):
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+./scripts/server/deploy.sh latest
 curl -k -o /dev/null -w '%{http_code}\n' https://localhost:8000/manifest.json
 # esperado: 200
 ```
